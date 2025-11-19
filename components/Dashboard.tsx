@@ -15,8 +15,8 @@ const GreetingHeader = () => (
             <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600">Gemini 2.5 & Veo 3.1 Online</span>
         </div>
         <h1 className="text-5xl md:text-6xl font-black text-slate-900 tracking-tight font-display leading-[1.1]">
-          Crie o <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500">Inimaginável</span><br/> 
-          hoje.
+          Materialize sua <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500">Imaginação</span><br/> 
+          sem limites.
         </h1>
     </div>
   </div>

@@ -371,15 +371,16 @@ const VideoGenerator: React.FC = () => {
                      voiceDescr = "HIGH-PITCHED, squeaky, cute talking animal voice, happy and smiling tone, cartoon character style";
                  }
               } else {
-                 const genderStr = voiceGender === 'MALE' ? 'MALE' : 'FEMALE';
+                 const genderStr = voiceGender === 'MALE' ? 'MALE VOICE' : 'FEMALE VOICE';
                  const ageStr = voiceAge === 'ADULT' ? 'ADULT' : 'CHILD/YOUNG';
-                 voiceDescr = `${ageStr} ${genderStr} VOICE`;
+                 
+                 voiceDescr = `${ageStr} ${genderStr}`;
                  
                  if (voiceAge === 'CHILD') {
                      voiceDescr += ", energetic, young tone, kid voice";
                  }
                  if (voiceGender === 'MALE') {
-                     voiceDescr += ", deep tone, resonant";
+                     voiceDescr += ", deep tone, resonant, authoritative";
                  }
               }
           } else {
@@ -511,13 +512,13 @@ const VideoGenerator: React.FC = () => {
                 {(activeTab === 'main' || activeTab === 'avatar') && (
                     <div className="mt-6 pt-4 border-t border-slate-100/50 animate-in fade-in slide-in-from-top-2">
                         <label className="flex items-center gap-2 text-xs font-bold text-teal-600 uppercase mb-2 tracking-wider">
-                             <Wallpaper size={12} /> Prompt do Fundo (Opcional)
+                             <Wallpaper size={12} /> Prompt para Vídeo de Fundo (Veo)
                         </label>
                         <div className="relative">
                             <textarea
                                 value={bgPrompt}
                                 onChange={(e) => setBgPrompt(e.target.value)}
-                                placeholder="Ex: Escritório moderno, iluminação suave, fundo desfocado..."
+                                placeholder="Descreva o cenário de fundo que o Veo deve gerar (ex: Escritório futurista, Praia ao pôr do sol)..."
                                 className="w-full h-20 bg-teal-50/30 border border-teal-100/50 rounded-xl p-3 text-sm text-slate-700 focus:ring-2 focus:ring-teal-500/20 outline-none resize-none"
                             />
                             <button 
