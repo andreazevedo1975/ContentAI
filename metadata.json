@@ -1,0 +1,7 @@
+{
+  "name": "ContentAI - Agente Criativo",
+  "description": "A full-stack capable AI Creative Agent for e-commerce marketing. Generate videos, images, and audio scripts from product data using Gemini, Veo, and Imagen.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
