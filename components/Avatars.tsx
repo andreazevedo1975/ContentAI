@@ -20,8 +20,8 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
     onClick={onClick}
     className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all ${
       active 
-        ? 'bg-black text-white shadow-lg scale-105' 
-        : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'
+        ? 'bg-slate-900 text-white shadow-lg scale-105 ring-2 ring-white/20' 
+        : 'bg-white/80 backdrop-blur text-slate-500 hover:bg-white border border-white/50'
     }`}
   >
     {icon}
@@ -32,9 +32,9 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
 const CreateCard: React.FC<{ label: string; subLabel: string; onClick: () => void; icon: React.ReactNode }> = ({ label, subLabel, onClick, icon }) => (
   <button 
     onClick={onClick}
-    className="relative aspect-[3/4] bg-white rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center hover:border-indigo-500 hover:bg-indigo-50/30 transition-all group text-center p-4"
+    className="relative aspect-[3/4] bg-white/60 backdrop-blur-sm rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center hover:border-indigo-500 hover:bg-white transition-all group text-center p-4 shadow-sm hover:shadow-md"
   >
-    <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors mb-4 shadow-sm">
+    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all mb-4 shadow-md">
         {icon}
     </div>
     <h3 className="font-bold text-slate-800 text-lg">{label}</h3>
@@ -57,7 +57,7 @@ const VideoAvatarCard: React.FC<{ name: string; imageSrc: string; videoSrc?: str
     };
 
     return (
-        <div className="relative aspect-[9/16] rounded-2xl overflow-hidden group bg-slate-900 shadow-md hover:shadow-xl transition-all">
+        <div className="relative aspect-[9/16] rounded-2xl overflow-hidden group bg-slate-900 shadow-lg hover:shadow-xl transition-all border border-white/20">
             {videoSrc ? (
                 <video 
                     ref={vidRef}
@@ -84,7 +84,7 @@ const VideoAvatarCard: React.FC<{ name: string; imageSrc: string; videoSrc?: str
                     onClick={togglePlay}
                     className={`absolute inset-0 flex items-center justify-center z-20 transition-all ${isPlaying ? 'opacity-0 hover:opacity-100 bg-black/20' : 'bg-black/20'}`}
                 >
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:scale-110 transition-transform border border-white/30">
                         {isPlaying ? <Pause size={20} className="fill-white text-white"/> : <Play size={20} className="fill-white text-white ml-1"/>}
                     </div>
                 </button>
@@ -93,41 +93,89 @@ const VideoAvatarCard: React.FC<{ name: string; imageSrc: string; videoSrc?: str
     );
 }
 
-const VoiceCard: React.FC<{ name: string; style: string; gender: string; audioSrc?: string; colorClass: string }> = ({ name, style, gender, audioSrc, colorClass }) => {
+interface VoiceCardProps {
+    name: string;
+    style: string;
+    gender: string;
+    audioSrc?: string;
+    colorClass: string;
+    voiceId?: string; // Added to support on-demand generation
+    previewText?: string; // Text to say if generating
+}
+
+const VoiceCard: React.FC<VoiceCardProps> = ({ name, style, gender, audioSrc, colorClass, voiceId, previewText }) => {
     const [playing, setPlaying] = useState(false);
+    const [loading, setLoading] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    const toggleAudio = () => {
-        if (!audioSrc) return;
-        
-        if (!audioRef.current) {
-            audioRef.current = new Audio(audioSrc);
-            audioRef.current.onended = () => setPlaying(false);
+    const toggleAudio = async () => {
+        if (loading) return;
+
+        // If audio object exists, just toggle
+        if (audioRef.current) {
+            if (playing) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+                setPlaying(false);
+            } else {
+                audioRef.current.play();
+                setPlaying(true);
+            }
+            return;
         }
 
-        if (playing) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-            setPlaying(false);
-        } else {
-            audioRef.current.play();
-            setPlaying(true);
+        // If we need to generate on the fly
+        if (!audioSrc && voiceId) {
+            setLoading(true);
+            try {
+                const text = previewText || `Olá, eu sou a voz ${name}. Sou uma inteligência artificial do Google.`;
+                const base64 = await generateSpeech(text, voiceId);
+                const pcm = decodeBase64(base64);
+                const wav = pcmToWav(pcm, 24000, 1);
+                const url = URL.createObjectURL(wav);
+                
+                audioRef.current = new Audio(url);
+                audioRef.current.onended = () => setPlaying(false);
+                
+                await audioRef.current.play();
+                setPlaying(true);
+            } catch (e) {
+                console.error("Failed to preview voice", e);
+                alert("Erro ao gerar preview.");
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // Legacy: If audioSrc was passed directly
+        if (audioSrc) {
+             audioRef.current = new Audio(audioSrc);
+             audioRef.current.onended = () => setPlaying(false);
+             audioRef.current.play();
+             setPlaying(true);
         }
     };
 
     return (
-        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all flex items-center gap-4 group">
+        <div className="glass-card rounded-2xl p-5 flex items-center gap-4 group hover:border-indigo-200">
             <button 
                 onClick={toggleAudio}
-                className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all ${playing ? 'bg-indigo-600 text-white scale-110 shadow-indigo-200' : `${colorClass.split(' ')[0]} ${colorClass.split(' ')[1]}`}`}
+                className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all shadow-md ${playing ? 'bg-indigo-600 text-white scale-110 shadow-indigo-200' : `${colorClass.split(' ')[0]} ${colorClass.split(' ')[1]}`}`}
             >
-                {playing ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
+                {loading ? (
+                    <Loader2 size={20} className="animate-spin fill-current" />
+                ) : playing ? (
+                    <Pause size={20} className="fill-current" />
+                ) : (
+                    <Play size={20} className="fill-current ml-1" />
+                )}
             </button>
 
             <div className="flex-1">
                 <div className="flex justify-between items-start">
                     <h4 className="font-bold text-slate-800">{name}</h4>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 border border-slate-100 px-1.5 rounded">{gender}</span>
+                    <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{gender}</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">{style}</p>
                 
@@ -201,9 +249,6 @@ const Avatars: React.FC = () => {
           const wav = pcmToWav(pcm, 24000, 1);
           const url = URL.createObjectURL(wav);
           
-          // Find style metadata for saving
-          const voiceMeta = GEMINI_VOICES.find(v => v.id === selectedBaseVoice);
-
           setMyVoices([...myVoices, { url, name: voiceName, base: selectedBaseVoice }]);
           setShowVoiceModal(false);
           setVoiceName('');
@@ -216,26 +261,26 @@ const Avatars: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto pb-24 animate-fade-in">
+    <div className="p-8 max-w-7xl mx-auto pb-24 animate-fade-in">
       
       {/* Header & Tabs */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
           <div>
-              <h1 className="text-3xl font-bold text-slate-900">Avatares e Vozes</h1>
-              <p className="text-slate-500 mt-1">Crie personagens digitais e clone vozes com IA.</p>
+              <h1 className="text-4xl font-extrabold text-slate-900 font-display">Avatares & Voz</h1>
+              <p className="text-slate-500 mt-2 font-medium">Laboratório de identidade digital.</p>
           </div>
-          <div className="flex bg-slate-100 p-1.5 rounded-full">
+          <div className="flex bg-white/50 backdrop-blur-md p-1.5 rounded-full border border-white/50 shadow-sm">
               <TabButton 
                 active={activeTab === 'avatars'} 
                 onClick={() => setActiveTab('avatars')} 
                 icon={<User size={18}/>} 
-                label="Estúdio de Avatares" 
+                label="Estúdio Visual" 
               />
               <TabButton 
                 active={activeTab === 'voices'} 
                 onClick={() => setActiveTab('voices')} 
                 icon={<AudioLines size={18}/>} 
-                label="Laboratório de Voz" 
+                label="Laboratório Sonoro" 
               />
           </div>
       </div>
@@ -244,10 +289,10 @@ const Avatars: React.FC = () => {
       {activeTab === 'avatars' && (
           <div className="animate-in slide-in-from-left-4">
              <div className="mb-8">
-                 <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                 <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                     <Video className="text-indigo-600" size={24}/> Meus Vídeos de Avatar
                  </h2>
-                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                      <CreateCard 
                         label="Novo Avatar" 
                         subLabel="Upload foto + Prompt" 
@@ -280,18 +325,18 @@ const Avatars: React.FC = () => {
           <div className="animate-in slide-in-from-right-4">
               
               {/* Create New Section */}
-              <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-3xl p-8 text-white mb-10 shadow-xl flex items-center justify-between relative overflow-hidden">
+              <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-10 text-white mb-12 shadow-2xl shadow-indigo-500/30 flex items-center justify-between relative overflow-hidden group">
                   <div className="relative z-10">
-                      <h2 className="text-2xl font-bold mb-2">Crie sua Voz Sintética</h2>
-                      <p className="text-indigo-100 mb-6 max-w-md">Escolha uma base neural (Gemini Voices), dê um nome e personalize o tom para seus vídeos.</p>
+                      <h2 className="text-3xl font-extrabold mb-2 font-display">Crie sua Voz Sintética</h2>
+                      <p className="text-indigo-100 mb-8 max-w-md text-lg">Clone estilos de voz usando a engine do Gemini 2.5 para seus projetos.</p>
                       <button 
                         onClick={() => setShowVoiceModal(true)}
-                        className="bg-white text-indigo-700 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-colors shadow-lg"
+                        className="bg-white text-indigo-700 px-8 py-4 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 hover:scale-105 transition-all shadow-xl"
                       >
                           <Plus size={20} /> Criar Nova Voz
                       </button>
                   </div>
-                  <div className="absolute right-0 top-0 h-full w-1/2 opacity-20">
+                  <div className="absolute right-0 top-0 h-full w-1/2 opacity-20 group-hover:scale-105 transition-transform duration-1000">
                         {/* Decorative Waveform */}
                         <svg viewBox="0 0 100 100" className="h-full w-full" preserveAspectRatio="none">
                             <path d="M0 50 Q 25 100 50 50 T 100 50" fill="none" stroke="white" strokeWidth="2" />
@@ -301,15 +346,15 @@ const Avatars: React.FC = () => {
               </div>
 
               {/* My Voices */}
-              <div className="mb-10">
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">Minhas Vozes Criadas</h3>
+              <div className="mb-12">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-5">Minhas Vozes Criadas</h3>
                   {myVoices.length === 0 ? (
-                      <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-                          <Music className="mx-auto text-slate-300 mb-2" size={32} />
+                      <div className="text-center py-12 border-2 border-dashed border-slate-300/50 rounded-2xl bg-white/30 backdrop-blur-sm">
+                          <Music className="mx-auto text-slate-300 mb-3" size={40} />
                           <p className="text-slate-500 font-medium">Nenhuma voz personalizada criada ainda.</p>
                       </div>
                   ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                           {myVoices.map((voice, i) => {
                               const meta = GEMINI_VOICES.find(v => v.id === voice.base) || GEMINI_VOICES[0];
                               return (
@@ -329,18 +374,17 @@ const Avatars: React.FC = () => {
 
               {/* System Voices */}
               <div>
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">Biblioteca Gemini (Bases Disponíveis)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-5">Base Neural (Gemini Models)</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {GEMINI_VOICES.map(voice => (
                           <VoiceCard 
                             key={voice.id}
+                            voiceId={voice.id}
                             name={voice.label}
                             style={voice.style}
                             gender={voice.gender}
                             colorClass={voice.color}
-                            // Note: System voices in list don't play audio directly here unless we generate samples on fly.
-                            // For UI demo we leave them static or we could add sample URL.
-                            // audioSrc={`/samples/${voice.id}.mp3`} 
+                            previewText={`Olá! Eu sou a voz ${voice.label}. Estou pronta para gerar seus conteúdos.`}
                           />
                       ))}
                   </div>
@@ -350,46 +394,48 @@ const Avatars: React.FC = () => {
 
       {/* --- MODAL: CREATE VIDEO --- */}
       {showVideoModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl relative">
-                  <button onClick={() => setShowVideoModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in">
+              <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl relative border border-white/20">
+                  <button onClick={() => setShowVideoModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1"><X size={20}/></button>
                   
-                  <h2 className="text-xl font-bold mb-6 text-slate-900">Novo Avatar Animado</h2>
+                  <h2 className="text-2xl font-bold mb-6 text-slate-900 font-display">Novo Avatar Animado</h2>
 
-                  <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl h-48 flex flex-col items-center justify-center relative hover:bg-slate-100 transition-colors cursor-pointer mb-6 group">
+                  <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl h-56 flex flex-col items-center justify-center relative hover:bg-indigo-50/30 hover:border-indigo-300 transition-all cursor-pointer mb-6 group">
                       {videoFile ? (
                           <div className="relative w-full h-full p-2">
-                              <img src={URL.createObjectURL(videoFile)} className="w-full h-full object-contain rounded-lg" />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                                  <p className="text-white font-bold text-sm">Trocar Imagem</p>
+                              <img src={URL.createObjectURL(videoFile)} className="w-full h-full object-contain rounded-xl" />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl backdrop-blur-sm">
+                                  <p className="text-white font-bold text-sm flex items-center gap-2"><Upload size={16}/> Trocar Imagem</p>
                               </div>
                           </div>
                       ) : (
                           <>
-                            <Upload size={32} className="text-indigo-500 mb-3" />
+                            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-3">
+                                <Upload size={24} />
+                            </div>
                             <p className="font-bold text-slate-700">Clique para fazer upload</p>
-                            <p className="text-xs text-slate-400">PNG, JPG (Max 5MB)</p>
+                            <p className="text-xs text-slate-400 mt-1">PNG, JPG (Max 5MB)</p>
                           </>
                       )}
                       <input type="file" accept="image/*" onChange={e => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" />
                   </div>
 
-                  <div className="mb-6">
+                  <div className="mb-8">
                       <label className="block text-sm font-bold text-slate-700 mb-2">Comportamento / Prompt</label>
                       <textarea 
                         value={videoPrompt}
                         onChange={e => setVideoPrompt(e.target.value)}
                         placeholder="Ex: Personagem falando calmamente, piscando os olhos, iluminação natural..."
-                        className="w-full bg-white border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 resize-none h-24 text-sm"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 resize-none h-28 text-sm shadow-sm"
                       />
                   </div>
 
                   <button 
                     onClick={handleCreateVideo}
                     disabled={loading || !videoFile}
-                    className="w-full bg-black text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-slate-800 transition-colors"
+                    className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] transition-transform shadow-lg"
                   >
-                      {loading ? <Loader2 className="animate-spin"/> : <Video size={18} />}
+                      {loading ? <Loader2 className="animate-spin"/> : <Video size={20} />}
                       Gerar Vídeo
                   </button>
               </div>
@@ -398,61 +444,64 @@ const Avatars: React.FC = () => {
 
       {/* --- MODAL: CREATE VOICE --- */}
       {showVoiceModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl relative">
-                  <button onClick={() => setShowVoiceModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in">
+              <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl relative border border-white/20">
+                  <button onClick={() => setShowVoiceModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1"><X size={20}/></button>
                   
-                  <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-                          <Mic size={20} />
+                  <div className="flex items-center gap-4 mb-8">
+                      <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
+                          <Mic size={24} />
                       </div>
-                      <h2 className="text-xl font-bold text-slate-900">Criar Nova Voz</h2>
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900 font-display">Criar Nova Voz</h2>
+                        <p className="text-xs text-slate-500">Defina o DNA da sua voz sintética.</p>
+                      </div>
                   </div>
 
-                  <div className="space-y-4 mb-6">
+                  <div className="space-y-5 mb-8">
                       <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome da Voz</label>
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1 tracking-wider">Nome da Voz</label>
                           <input 
                             value={voiceName}
                             onChange={e => setVoiceName(e.target.value)}
                             placeholder="Ex: Narrador Corporativo"
-                            className="w-full border border-slate-200 rounded-lg p-3 font-bold text-slate-900 outline-none focus:border-indigo-500"
+                            className="w-full border border-slate-200 rounded-xl p-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
                           />
                       </div>
 
                       <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Voz Base (Gemini Model)</label>
-                          <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Voz Base (Gemini Model)</label>
+                          <div className="grid grid-cols-2 gap-3 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                               {GEMINI_VOICES.map(voice => (
                                   <button
                                     key={voice.id}
                                     onClick={() => setSelectedBaseVoice(voice.id)}
-                                    className={`p-2 rounded-lg border text-left transition-all flex items-center gap-2 ${
+                                    className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
                                         selectedBaseVoice === voice.id 
                                         ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' 
-                                        : 'border-slate-200 hover:border-slate-300'
+                                        : 'border-slate-200 hover:border-indigo-200'
                                     }`}
                                   >
-                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${voice.color}`}>
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${voice.color}`}>
                                           {voice.id[0]}
                                       </div>
-                                      <div>
-                                          <p className="text-xs font-bold text-slate-800">{voice.label}</p>
-                                          <p className="text-[9px] text-slate-500">{voice.gender}</p>
+                                      <div className="min-w-0">
+                                          <p className="text-xs font-bold text-slate-800 truncate">{voice.label}</p>
+                                          <p className="text-[9px] text-slate-500 truncate">{voice.gender}</p>
                                       </div>
-                                      {selectedBaseVoice === voice.id && <CheckCircle2 size={14} className="ml-auto text-indigo-600"/>}
+                                      {selectedBaseVoice === voice.id && <CheckCircle2 size={16} className="ml-auto text-indigo-600 shrink-0"/>}
                                   </button>
                               ))}
                           </div>
                       </div>
 
                       <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Texto de Teste</label>
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1 tracking-wider">Texto de Teste</label>
                           <textarea 
                             value={voiceText}
                             onChange={e => setVoiceText(e.target.value)}
                             placeholder="O que você quer que esta voz diga?"
-                            className="w-full border border-slate-200 rounded-lg p-3 h-24 resize-none text-sm outline-none focus:border-indigo-500"
+                            className="w-full border border-slate-200 rounded-xl p-4 h-28 resize-none text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
                           />
                       </div>
                   </div>
@@ -460,9 +509,9 @@ const Avatars: React.FC = () => {
                   <button 
                     onClick={handleCreateVoice}
                     disabled={loading || !voiceName || !voiceText}
-                    className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] transition-transform shadow-lg shadow-indigo-200"
                   >
-                      {loading ? <Loader2 className="animate-spin"/> : <AudioLines size={18} />}
+                      {loading ? <Loader2 className="animate-spin"/> : <AudioLines size={20} />}
                       Gerar e Salvar Voz
                   </button>
               </div>

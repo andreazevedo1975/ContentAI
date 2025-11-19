@@ -43,6 +43,7 @@ export const playAudioBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
 
 /**
  * Converts raw PCM data to a WAV Blob
+ * IMPORTANT: Gemini Flash Audio typically returns 24000Hz (24kHz) sample rate.
  */
 export function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000, numChannels: number = 1): Blob {
   const header = new ArrayBuffer(44);
@@ -69,6 +70,7 @@ export function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000, numCha
   writeString(view, 36, 'data');
   view.setUint32(40, totalDataLen, true);
 
+  // Create the Blob with the correct header + PCM data
   const blob = new Blob([header, pcmData], { type: 'audio/wav' });
   return blob;
 }

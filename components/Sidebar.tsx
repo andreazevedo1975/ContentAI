@@ -1,25 +1,60 @@
 import React from 'react';
-import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, Zap, Lock } from 'lucide-react';
+import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, Key, Zap } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
-const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string; active: boolean }> = ({ to, icon, label, active }) => (
+// Brand Logo Component
+const BrandLogo = () => (
+  <div className="flex items-center gap-4 px-2">
+    <div className="relative w-12 h-12 flex items-center justify-center bg-white rounded-2xl shadow-sm border border-white/50">
+       {/* Abstract 'AI Spark' Logo */}
+       <svg viewBox="0 0 100 100" className="w-8 h-8 drop-shadow-sm">
+          <defs>
+            <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="50%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#f43f5e" />
+            </linearGradient>
+          </defs>
+          <path d="M50 10 L90 30 L90 70 L50 90 L10 70 L10 30 Z" fill="none" stroke="url(#logoGradient)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="50" cy="50" r="12" fill="url(#logoGradient)" />
+       </svg>
+    </div>
+    <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 font-display">Content<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-500">AI</span></h1>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Creative OS 2.0</p>
+    </div>
+  </div>
+);
+
+const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string; active: boolean; badge?: string }> = ({ to, icon, label, active, badge }) => (
   <Link
     to={to}
-    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all mb-1 ${
+    className={`group flex items-center justify-between px-5 py-3.5 rounded-2xl transition-all duration-300 mb-2 ${
       active 
-        ? 'bg-indigo-50 text-indigo-600 font-semibold' 
-        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+        ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-700 shadow-sm border border-indigo-100/50' 
+        : 'text-slate-500 hover:bg-white/50 hover:text-slate-900 hover:pl-6'
     }`}
   >
-    {React.cloneElement(icon as React.ReactElement, { size: 18, strokeWidth: active ? 2.5 : 2 })}
-    <span className="text-sm">{label}</span>
+    <div className="flex items-center gap-4">
+        <div className={`transition-colors ${active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-500'}`}>
+            {React.cloneElement(icon as React.ReactElement, { size: 22, strokeWidth: active ? 2.5 : 2 })}
+        </div>
+        <span className={`text-[15px] font-medium ${active ? 'font-bold' : ''}`}>{label}</span>
+    </div>
+    {badge && (
+        <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+            {badge}
+        </span>
+    )}
+    {active && <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]" />}
   </Link>
 );
 
-const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
-  <h3 className="px-3 mt-6 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">
-    {label}
-  </h3>
+const SectionLabel: React.FC<{ label: string }> = ({ label }) => (
+  <div className="px-5 mt-8 mb-4 flex items-center gap-3">
+      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest opacity-80">{label}</span>
+      <div className="h-px bg-gradient-to-r from-slate-200 to-transparent flex-1"></div>
+  </div>
 );
 
 const Sidebar: React.FC = () => {
@@ -27,33 +62,52 @@ const Sidebar: React.FC = () => {
   const path = location.pathname;
 
   return (
-    <div className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col fixed left-0 top-0 z-50">
-      {/* Logo Area */}
-      <div className="p-5 flex items-center gap-2">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold shadow-md shadow-indigo-200">
-            C
-        </div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">ContentAI</h1>
+    <div className="hidden md:flex w-80 h-[calc(100vh-3rem)] rounded-[32px] bg-white/70 backdrop-blur-2xl border border-white/50 shadow-xl flex-col fixed left-6 top-6 z-50 overflow-hidden transition-all duration-500">
+      {/* Header */}
+      <div className="p-8 pb-4">
+        <BrandLogo />
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 overflow-y-auto">
+      {/* Scrollable Nav */}
+      <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar">
         <NavItem to="/" icon={<Home />} label="Início" active={path === '/'} />
 
-        <SectionHeader label="Criação" />
-        <NavItem to="/video" icon={<Video />} label="Gerador de vídeos" active={path === '/video'} />
-        <NavItem to="/image" icon={<ImageIcon />} label="Estúdio de imagem" active={path === '/image'} />
+        <SectionLabel label="Creative Suite" />
+        <NavItem to="/video" icon={<Video />} label="Vídeo & Motion" active={path === '/video'} />
+        <NavItem to="/image" icon={<ImageIcon />} label="Imagem & Design" active={path === '/image'} />
+        <NavItem to="/avatars" icon={<User />} label="Avatares & Voz" active={path === '/avatars'} />
         <NavItem to="/tts" icon={<Mic />} label="Texto para Fala" active={path === '/tts'} />
-        <NavItem to="/inspiration" icon={<Sparkles />} label="Inspiração" active={path === '/inspiration'} />
-        <NavItem to="/avatars" icon={<User />} label="Avatares e vozes" active={path === '/avatars'} />
 
-        <SectionHeader label="Gerenciamento" />
-        <NavItem to="/analytics" icon={<BarChart2 />} label="Análise" active={path === '/analytics'} />
-        <NavItem to="/editor" icon={<Edit3 />} label="Editor" active={path === '/editor'} />
+        <SectionLabel label="Discover" />
+        <NavItem to="/inspiration" icon={<Sparkles />} label="Inspiração" active={path === '/inspiration'} badge="New" />
+        <NavItem to="/resources" icon={<Cloud />} label="Recursos Pro" active={path.startsWith('/resources')} />
 
-        <SectionHeader label="Espaço" />
-        <NavItem to="/resources" icon={<Cloud />} label="Recursos & Tools" active={path.startsWith('/resources') || path === '/live' || path === '/research' || path === '/locations' || path === '/video-analysis'} />
+        <SectionLabel label="Workspace" />
+        <NavItem to="/analytics" icon={<BarChart2 />} label="Analytics" active={path === '/analytics'} />
+        <NavItem to="/editor" icon={<Edit3 />} label="Calendário" active={path === '/editor'} />
       </nav>
+
+      {/* Pro Footer */}
+      <div className="p-5 bg-white/40 border-t border-white/50 backdrop-blur-md">
+        <button 
+            onClick={() => window.aistudio?.openSelectKey?.()}
+            className="relative w-full overflow-hidden group bg-slate-900 text-white rounded-2xl p-4 shadow-xl hover:shadow-indigo-500/30 transition-all duration-300 hover:-translate-y-1"
+        >
+             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500 to-pink-500 rounded-full blur-2xl opacity-20 -mr-8 -mt-8 group-hover:opacity-50 transition-opacity"></div>
+             <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 group-hover:bg-white/20 transition-colors">
+                        <Key size={18} className="text-indigo-200" />
+                    </div>
+                    <div className="text-left">
+                        <p className="text-xs font-bold text-white">API Configuration</p>
+                        <p className="text-[10px] text-slate-400 group-hover:text-slate-200 transition-colors">Manage Keys</p>
+                    </div>
+                </div>
+                <Zap size={16} className="text-amber-400 fill-amber-400 animate-pulse" />
+             </div>
+        </button>
+      </div>
     </div>
   );
 };

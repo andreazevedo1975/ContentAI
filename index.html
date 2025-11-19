@@ -3,23 +3,99 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ContentAI - Agente Criativo</title>
+    <title>ContentAI - Creative Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-      body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; color: #1e293b; }
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar { width: 8px; height: 8px; }
-      ::-webkit-scrollbar-track { background: #f1f5f9; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      
-      .text-gradient {
-        background-clip: text;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-image: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+      :root {
+        --glass-border: rgba(255, 255, 255, 0.6);
+        --glass-bg: rgba(255, 255, 255, 0.65);
+        --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+        --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
       }
+
+      body { 
+        font-family: 'Inter', sans-serif; 
+        background-color: #fdfbff; /* Fallback */
+        color: #1e293b;
+        overflow: hidden; 
+      }
+      
+      h1, h2, h3, h4, h5, h6, .font-display {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      /* --- VIBRANT AURORA BACKGROUND --- */
+      .aurora-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        background: 
+          radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+          radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+          radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+        background-color: #ffffff;
+        background-image: 
+            radial-gradient(at 18% 9%, hsla(296,68%,88%,1) 0px, transparent 50%),
+            radial-gradient(at 89% 12%, hsla(250,86%,89%,1) 0px, transparent 50%),
+            radial-gradient(at 38% 88%, hsla(194,86%,88%,1) 0px, transparent 50%),
+            radial-gradient(at 84% 84%, hsla(322,79%,91%,1) 0px, transparent 50%),
+            radial-gradient(at 52% 47%, hsla(263,79%,94%,1) 0px, transparent 50%),
+            radial-gradient(at 0% 50%, hsla(229,82%,93%,1) 0px, transparent 50%);
+        background-size: 150% 150%;
+        animation: aurora-move 20s ease infinite alternate;
+      }
+
+      @keyframes aurora-move {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      /* Glass Utilities Refined */
+      .glass-panel {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy effect */
+      }
+      .glass-card:hover {
+        transform: translateY(-6px) scale(1.01);
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        border-color: rgba(255, 255, 255, 0.9);
+      }
+
+      /* Animations */
+      .animate-fade-in {
+        animation: fadeIn 0.8s ease-out forwards;
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Custom Scrollbar */
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.4); }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
   <script type="importmap">
 {

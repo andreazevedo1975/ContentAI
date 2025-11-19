@@ -18,9 +18,14 @@ import VideoAnalyzer from './components/VideoAnalyzer';
 const App: React.FC = () => {
   return (
     <Router>
-      <div className="flex min-h-screen bg-[#f8f9fa] text-slate-900 font-sans">
+      {/* New Vibrant Aurora Background */}
+      <div className="aurora-bg"></div>
+
+      <div className="flex min-h-screen text-slate-900 font-sans relative z-10 p-4 md:p-6 gap-6">
         <Sidebar />
-        <main className="flex-1 ml-64 overflow-y-auto h-screen relative">
+        
+        {/* Main Content Area - Floating Glass Panel */}
+        <main className="flex-1 md:ml-80 rounded-[32px] bg-white/40 backdrop-blur-xl border border-white/60 shadow-2xl overflow-y-auto h-[calc(100vh-3rem)] relative custom-scrollbar">
             <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/video" element={<VideoGenerator />} />

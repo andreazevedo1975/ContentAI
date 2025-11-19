@@ -42,6 +42,7 @@ declare global {
   }
 
   interface Window {
+    aistudio?: AIStudio;
     webkitAudioContext: typeof AudioContext;
     webkitSpeechRecognition: any;
   }
@@ -54,7 +55,7 @@ export const ScriptSchema = {
     headline: { type: Type.STRING, description: "Catchy hook for the video" },
     scriptBody: { type: Type.STRING, description: "The main narration script for the video, approx 30-60 seconds" },
     visualPrompt: { type: Type.STRING, description: "A detailed prompt to generate the background video using Veo (realistic, cinematic)" },
-    imagePrompt: { type: Type.STRING, description: "A detailed prompt to generate a product showcase image using Imagen" },
+    imagePrompt: { type: Type.STRING, description: "A detailed prompt to generate the product showcase image using Imagen" },
   },
   required: ["headline", "scriptBody", "visualPrompt", "imagePrompt"],
 };

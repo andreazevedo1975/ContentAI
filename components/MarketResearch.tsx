@@ -17,14 +17,14 @@ const MarketResearch: React.FC = () => {
       try {
           const response = await performDeepResearch(query);
           setResult(response.text || "No text returned.");
-          // Extract grounding chunks
+          // Extract grounding chunks safely
           const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
           const webSources = chunks
             .filter((c: any) => c.web)
             .map((c: any) => ({ title: c.web.title, uri: c.web.uri }));
           setSources(webSources);
       } catch (e) {
-          setResult("Erro ao realizar pesquisa.");
+          setResult("Erro ao realizar pesquisa. Tente novamente.");
       } finally {
           setLoading(false);
       }
@@ -54,7 +54,7 @@ const MarketResearch: React.FC = () => {
                </button>
            </div>
            <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
-               <span className="flex items-center gap-1"><BrainCircuit size={12}/> Thinking Mode (Gemini 3 Pro)</span>
+               <span className="flex items-center gap-1"><BrainCircuit size={12}/> Thinking Mode</span>
                <span className="flex items-center gap-1"><Search size={12}/> Google Search Grounding</span>
            </div>
        </div>

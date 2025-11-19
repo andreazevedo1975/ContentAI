@@ -1,17 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Volume2, AlertCircle, Radio } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, Radio } from 'lucide-react';
 import { connectLiveSession } from '../services/geminiService';
-import { decodeBase64, decodeAudioData, pcmToWav } from '../services/audioUtils';
-
-// --- Live API Audio Utils ---
-function createBlob(data: Float32Array): Blob {
-    const l = data.length;
-    const int16 = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      int16[i] = data[i] * 32768;
-    }
-    return new Blob([int16], { type: 'audio/pcm' });
-}
+import { decodeBase64, decodeAudioData } from '../services/audioUtils';
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     let binary = '';
@@ -25,76 +15,83 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 const LiveAssistant: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [isTalking, setIsTalking] = useState(false); // Model is talking
+  const [isTalking, setIsTalking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sessionRef = useRef<Promise<any> | null>(null);
+  // Use a Ref to store the ACTIVE session instance
+  const activeSessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
-  const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
   const stopSession = () => {
+    if (processorRef.current) {
+        processorRef.current.disconnect();
+        processorRef.current = null;
+    }
     if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
     }
-    // Cannot strictly "close" the session object from SDK easily if not exposed, 
-    // but cutting audio context stops the flow.
+    activeSessionRef.current = null;
     setIsConnected(false);
   };
 
   const startSession = async () => {
     setError(null);
     try {
-        // 1. Setup Audio Setup
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        audioContextRef.current = audioCtx;
         
-        // Output Context (24kHz for model output)
+        // Initialize contexts
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const outputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+        
+        // Crucial: Resume context on user gesture
+        await audioCtx.resume();
+        await outputCtx.resume();
+
+        audioContextRef.current = audioCtx;
         nextStartTimeRef.current = 0;
 
-        // 2. Connect to Live API
-        const sessionPromise = connectLiveSession({
+        // Start Input Streaming Logic
+        const source = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        
+        // Connect the processor
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+        processorRef.current = processor;
+
+        // NOTE: We do NOT use sessionPromise inside onaudioprocess loop to avoid thousands of promise closures.
+        // Instead, we check the activeSessionRef.
+        processor.onaudioprocess = (e) => {
+            if (!activeSessionRef.current) return; // Session not ready yet
+
+            const inputData = e.inputBuffer.getChannelData(0);
+            const l = inputData.length;
+            const int16 = new Int16Array(l);
+            for (let i = 0; i < l; i++) {
+                int16[i] = inputData[i] * 32768;
+            }
+            
+            const base64Data = arrayBufferToBase64(int16.buffer);
+            
+            // Send directly to active session
+            activeSessionRef.current.sendRealtimeInput({ 
+                media: { 
+                    mimeType: 'audio/pcm;rate=16000', 
+                    data: base64Data 
+                } 
+            });
+        };
+
+        // Connect to API
+        connectLiveSession({
             onopen: () => {
                 setIsConnected(true);
                 console.log("Live Session Connected");
-
-                // Start Input Streaming
-                const source = audioCtx.createMediaStreamSource(stream);
-                const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                
-                processor.onaudioprocess = async (e) => {
-                    const inputData = e.inputBuffer.getChannelData(0);
-                    // Convert Float32 to Int16 PCM
-                    const l = inputData.length;
-                    const int16 = new Int16Array(l);
-                    for (let i = 0; i < l; i++) {
-                        int16[i] = inputData[i] * 32768;
-                    }
-                    // Encode to base64
-                    const base64Data = arrayBufferToBase64(int16.buffer);
-                    
-                    sessionPromise.then(session => {
-                        session.sendRealtimeInput({ 
-                            media: { 
-                                mimeType: 'audio/pcm;rate=16000', 
-                                data: base64Data 
-                            } 
-                        });
-                    });
-                };
-
-                source.connect(processor);
-                processor.connect(audioCtx.destination);
-                
-                inputSourceRef.current = source;
-                processorRef.current = processor;
             },
             onmessage: async (msg: any) => {
-                // Handle Audio Output
                 const base64Audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                 if (base64Audio) {
                     setIsTalking(true);
@@ -111,32 +108,32 @@ const LiveAssistant: React.FC = () => {
                     nextStartTimeRef.current = start + buffer.duration;
                     
                     source.onended = () => {
-                        if (outputCtx.currentTime >= nextStartTimeRef.current) {
+                        if (outputCtx.currentTime >= nextStartTimeRef.current - 0.1) {
                              setIsTalking(false);
                         }
                     };
                 }
             },
             onclose: () => {
-                console.log("Live Session Closed");
                 setIsConnected(false);
+                activeSessionRef.current = null;
             },
             onerror: (err: any) => {
                 console.error("Live Session Error", err);
-                setError("Conexão perdida ou erro de API.");
-                setIsConnected(false);
+                setError("Erro de conexão.");
+                stopSession();
             }
+        }).then((session: any) => {
+            // Once resolved, store session in ref so the loop can use it
+            activeSessionRef.current = session;
         });
-        
-        sessionRef.current = sessionPromise;
 
     } catch (e) {
         console.error(e);
-        setError("Falha ao acessar microfone ou conectar.");
+        setError("Falha ao iniciar áudio.");
     }
   };
 
-  // Cleanup
   useEffect(() => {
       return () => stopSession();
   }, []);
@@ -156,7 +153,7 @@ const LiveAssistant: React.FC = () => {
                 )}
            </div>
            <h1 className="mt-8 text-3xl font-bold text-slate-900">Gemini Live</h1>
-           <p className="text-slate-500 mt-2">{isConnected ? "Ouvindo... Fale agora." : "Clique para conectar e conversar."}</p>
+           <p className="text-slate-500 mt-2">{isConnected ? "Conectado. Fale agora." : "Clique para iniciar conversa."}</p>
        </div>
 
        {error && (
@@ -178,7 +175,7 @@ const LiveAssistant: React.FC = () => {
        </div>
        
        <div className="mt-12 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-400">
-           <p className="flex items-center justify-center gap-2"><Radio size={12}/> Powered by Gemini 2.5 Flash Native Audio (Low Latency)</p>
+           <p className="flex items-center justify-center gap-2"><Radio size={12}/> Powered by Gemini 2.5 Flash Native Audio</p>
        </div>
     </div>
   );

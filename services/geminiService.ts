@@ -5,10 +5,15 @@ import { ScriptSchema, CalendarSchema } from "../types";
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Helper to strip markdown code blocks from JSON strings
+ * Helper to strip markdown code blocks from JSON strings.
+ * Now robustly finds the first '{' and last '}' to ignore intro text.
  */
 const cleanJSON = (text: string): string => {
   if (!text) return "{}";
+  // Try to find a JSON object block
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) return match[0];
+  // Fallback cleanup
   return text.replace(/^```json\s*/, '').replace(/^```/, '').replace(/\s*```$/, '').trim();
 };
 
@@ -35,7 +40,6 @@ export const enhancePrompt = async (simplePrompt: string): Promise<string> => {
 
 /**
  * Analyzes an image to determine the subject type and appropriate voice persona.
- * Used for Talking Photos to match voice to gender/age/species.
  */
 export const detectVoicePersona = async (imageBase64: string): Promise<{ type: string; voicePrompt: string; label: string }> => {
   const ai = getAI();
@@ -78,7 +82,6 @@ export const detectVoicePersona = async (imageBase64: string): Promise<{ type: s
 
 /**
  * Generates a marketing script and visual prompts based on product info.
- * Uses: gemini-2.5-flash
  */
 export const generateMarketingPlan = async (productName: string, productDesc: string) => {
   const ai = getAI();
@@ -97,7 +100,7 @@ export const generateMarketingPlan = async (productName: string, productDesc: st
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -118,6 +121,8 @@ export const generateMarketingPlan = async (productName: string, productDesc: st
  * Generates a social media content calendar.
  */
 export const generateSocialPlan = async (niche: string) => {
+  if (!process.env.API_KEY) return generateLocalSocialPlan(niche);
+  
   const ai = getAI();
   const prompt = `
     Generate a social media content calendar for the current month for a brand in the "${niche}" niche.
@@ -137,14 +142,32 @@ export const generateSocialPlan = async (niche: string) => {
     return JSON.parse(cleanJSON(response.text || "{}"));
   } catch (error) {
     console.error("Error generating calendar:", error);
-    throw error;
+    // Fallback to local
+    return generateLocalSocialPlan(niche);
   }
+};
+
+export const generateLocalSocialPlan = (niche: string) => {
+    return {
+        posts: [
+            { day: 2, title: `${niche}: Bastidores`, platform: 'Instagram', time: '10:00' },
+            { day: 5, title: `Dica de ${niche}`, platform: 'TikTok', time: '18:00' },
+            { day: 9, title: `Promoção Relâmpago`, platform: 'Facebook', time: '12:00' },
+            { day: 12, title: `Tutorial Rápido`, platform: 'TikTok', time: '19:00' },
+            { day: 16, title: `Meme do Nicho`, platform: 'Instagram', time: '15:00' },
+            { day: 20, title: `Depoimento de Cliente`, platform: 'Facebook', time: '11:00' },
+            { day: 24, title: `Trend Alert: ${niche}`, platform: 'TikTok', time: '20:00' },
+            { day: 28, title: `Resumo do Mês`, platform: 'Instagram', time: '17:00' }
+        ]
+    };
 };
 
 /**
  * Generates analysis insights based on metrics.
  */
 export const generateAnalysis = async (metrics: any) => {
+  if (!process.env.API_KEY) return generateLocalAnalysis(metrics);
+
   const ai = getAI();
   const prompt = `
     Analyze these social media metrics and provide a 2-sentence strategic insight on what to improve.
@@ -159,13 +182,19 @@ export const generateAnalysis = async (metrics: any) => {
     });
     return response.text;
   } catch (error) {
-    return "Unable to generate insights at this time.";
+    return generateLocalAnalysis(metrics);
   }
 };
 
+export const generateLocalAnalysis = (metrics: any) => {
+    const growth = parseInt(metrics.follower_growth);
+    if (growth > 10) return "Seu crescimento está excelente! Continue apostando em vídeos curtos para manter o engajamento alto.";
+    if (growth > 0) return "Crescimento estável. Experimente postar em horários diferentes para alcançar novos públicos.";
+    return "O engajamento caiu um pouco. Tente interagir mais nos stories e usar hashtags em alta.";
+}
+
 /**
  * Generates a High-Quality Image using Imagen 3.
- * Uses: imagen-4.0-generate-001
  */
 export const generateImage = async (prompt: string) => {
   const ai = getAI();
@@ -192,25 +221,34 @@ export const generateImage = async (prompt: string) => {
 
 /**
  * Generates a Fast Design Image using Nano Banana.
- * Uses: gemini-2.5-flash-image
+ * Supports Image-to-Image if imageBase64 is provided.
  */
-export const generateFastImage = async (prompt: string) => {
+export const generateFastImage = async (prompt: string, imageBase64?: string, mimeType: string = 'image/png') => {
   const ai = getAI();
   try {
     console.log("Generating Nano Banana image for:", prompt);
+    
+    const parts: any[] = [];
+    
+    if (imageBase64) {
+        parts.push({
+            inlineData: {
+                mimeType: mimeType,
+                data: imageBase64
+            }
+        });
+    }
+    
+    parts.push({ text: prompt });
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { text: prompt },
-        ],
-      },
+      contents: { parts },
       config: {
           responseModalities: [Modality.IMAGE],
       },
     });
 
-    // Nano Banana returns image in inlineData of the content part
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         const base64ImageBytes: string = part.inlineData.data;
@@ -226,9 +264,10 @@ export const generateFastImage = async (prompt: string) => {
 
 /**
  * Generates Speech from Text.
- * Uses: gemini-2.5-flash-preview-tts
  */
 export const generateSpeech = async (text: string, voiceName: string = 'Kore') => {
+  if (!process.env.API_KEY) return generateLocalSpeech(text);
+
   const ai = getAI();
   try {
     const response = await ai.models.generateContent({
@@ -249,22 +288,51 @@ export const generateSpeech = async (text: string, voiceName: string = 'Kore') =
     return base64Audio;
   } catch (error) {
     console.error("Error generating speech:", error);
+    return generateLocalSpeech(text);
+  }
+};
+
+export const generateLocalSpeech = async (text: string) => {
+    console.warn("Using Local TTS Fallback (Browser)");
+    return new Promise<string>((resolve, reject) => {
+        // This is a dummy fallback that returns empty string to trigger UI alert, 
+        // or could technically capture system audio but that's complex. 
+        // For now we will just rely on the UI handling the failure or using window.speechSynthesis directly in component.
+        reject("API Key required for Neural Voice. Use Browser Voice instead.");
+    });
+}
+
+/**
+ * Transcribes audio (e.g. microphone recording or file) to text using Gemini.
+ */
+export const transcribeUserAudio = async (audioBase64: string): Promise<string> => {
+  const ai = getAI();
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          { inlineData: { mimeType: 'audio/wav', data: audioBase64 } }, // Gemini handles wav/mp3 inputs
+          { text: "Transcribe this audio exactly as spoken. Return only the text." }
+        ]
+      }
+    });
+    return response.text || "";
+  } catch (error) {
+    console.error("Transcription error:", error);
     throw error;
   }
 };
 
 /**
  * Generates a Video using Veo.
- * Uses: veo-3.1-fast-generate-preview or veo-3.1-generate-preview
- * Supports Text-to-Video and Image-to-Video.
- * Handles specific API key errors for Veo.
+ * Handles API Key errors specifically.
  */
 export const generateVideo = async (prompt: string, imageBase64?: string, modelId: string = 'veo-3.1-fast-generate-preview') => {
-  // Internal helper to execute the generation
+  
   const executeGeneration = async () => {
-    // Always create a new instance to ensure fresh key
+    // New instance for fresh key
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
     console.log("Starting Veo generation with model:", modelId);
     
     const request: any = {
@@ -278,7 +346,6 @@ export const generateVideo = async (prompt: string, imageBase64?: string, modelI
     };
 
     if (imageBase64) {
-      console.log("Attaching image for Image-to-Video generation...");
       request.image = {
         imageBytes: imageBase64,
         mimeType: 'image/png', 
@@ -286,18 +353,15 @@ export const generateVideo = async (prompt: string, imageBase64?: string, modelI
     }
 
     let operation = await ai.models.generateVideos(request);
-    console.log("Veo operation started:", operation);
-
+    
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 5000));
-      console.log("Polling Veo status...");
       operation = await ai.operations.getVideosOperation({operation: operation});
     }
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) throw new Error("No video URI returned");
 
-    console.log("Fetching video bytes...");
     const videoRes = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     const blob = await videoRes.blob();
     return URL.createObjectURL(blob);
@@ -307,41 +371,29 @@ export const generateVideo = async (prompt: string, imageBase64?: string, modelI
     return await executeGeneration();
   } catch (error: any) {
     console.error("Error generating video:", error);
-
-    // Enhanced Error Handling for Quota (429), Invalid Key (400), and Entity Not Found (404)
     const errorMessage = error.message || JSON.stringify(error);
     
-    // Check for Quota Exceeded
     const isQuotaError = errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || error.status === "RESOURCE_EXHAUSTED" || error.code === 429;
-    
-    // Check for Entity Not Found (Common Veo issue with wrong key/project)
     const isEntityNotFoundError = errorMessage.includes("Requested entity was not found") || error.code === 404;
-    
-    // Check for Invalid Key / Expired Key
     const isKeyInvalidError = errorMessage.includes("API key expired") || errorMessage.includes("API_KEY_INVALID") || error.code === 400;
 
     if (isEntityNotFoundError || isQuotaError || isKeyInvalidError) {
       console.warn("Veo API Error (Key/Quota/Invalid). Prompting user to select key again...");
-      
       if (window.aistudio && window.aistudio.openSelectKey) {
         await window.aistudio.openSelectKey();
-        // Retry once after key selection
         console.log("Retrying video generation after key selection...");
         return await executeGeneration();
       }
     }
-    
     throw error;
   }
 };
 
 /**
- * LIVE API: Establishes a real-time session.
- * Uses: gemini-2.5-flash-native-audio-preview-09-2025
+ * LIVE API Connection
  */
-export const connectLiveSession = async (callbacks: any) => {
+export const connectLiveSession = async (callbacks: any): Promise<any> => {
     const ai = getAI();
-    // Note: We return the promise so the component can use .then() to send inputs only after connection
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       callbacks,
@@ -356,8 +408,7 @@ export const connectLiveSession = async (callbacks: any) => {
 };
 
 /**
- * MARKET RESEARCH: Uses Thinking Mode + Search Grounding.
- * Uses: gemini-3-pro-preview
+ * MARKET RESEARCH: Thinking Mode + Search Grounding
  */
 export const performDeepResearch = async (query: string) => {
   const ai = getAI();
@@ -367,7 +418,7 @@ export const performDeepResearch = async (query: string) => {
       contents: query,
       config: {
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 1024 } // Enable thinking for reasoning
+        thinkingConfig: { thinkingBudget: 32768 } // Max budget for deep research
       }
     });
     return response;
@@ -378,8 +429,7 @@ export const performDeepResearch = async (query: string) => {
 };
 
 /**
- * LOCATION SCOUT: Uses Maps Grounding.
- * Uses: gemini-2.5-flash
+ * LOCATION SCOUT: Maps Grounding
  */
 export const findLocations = async (query: string) => {
   const ai = getAI();
@@ -399,8 +449,7 @@ export const findLocations = async (query: string) => {
 };
 
 /**
- * VIDEO ANALYSIS: Uses Gemini 3 Pro for Video Understanding.
- * Uses: gemini-3-pro-preview
+ * VIDEO ANALYSIS: Gemini 3 Pro Vision
  */
 export const analyzeVideo = async (prompt: string, videoBase64: string, mimeType: string = 'video/mp4') => {
     const ai = getAI();
@@ -417,6 +466,23 @@ export const analyzeVideo = async (prompt: string, videoBase64: string, mimeType
         return response.text;
     } catch (error) {
         console.error("Video analysis error:", error);
+        throw error;
+    }
+}
+
+/**
+ * FLASH BRAINSTORM: Low Latency
+ */
+export const askFlashLite = async (query: string) => {
+    const ai = getAI();
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-lite-latest',
+            contents: query
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Flash Lite error:", error);
         throw error;
     }
 }
