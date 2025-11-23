@@ -132,7 +132,7 @@ const VideoGenerator: React.FC = () => {
 
   // Voice Settings State (Updated)
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
-  const [voiceGender, setVoiceGender] = useState<'MALE' | 'FEMALE' | 'MASCOT'>('FEMALE');
+  const [voiceGender, setVoiceGender] = useState<'MALE' | 'FEMALE' | 'MASCOT' | 'NONE'>('FEMALE');
   const [voiceAge, setVoiceAge] = useState<'ADULT' | 'CHILD'>('ADULT');
   const [voiceStyle, setVoiceStyle] = useState(''); // Custom text for emotion/tone
   
@@ -152,7 +152,7 @@ const VideoGenerator: React.FC = () => {
   const [captionsLanguage, setCaptionsLanguage] = useState('pt-BR');
   
   // Avatar Facial Animation
-  const [facialExpressiveness, setFacialExpressiveness] = useState(false);
+  const [facialExpressiveness, setFacialExpressiveness] = useState('default'); // default, happy, serious, surprised
   const [headMovement, setHeadMovement] = useState(false);
 
   // Share Menu State
@@ -199,9 +199,13 @@ const VideoGenerator: React.FC = () => {
   }, [location.state]);
 
   // UI Helper to switch gender and reset specific dropdown to Auto (to ensure manual choice wins)
-  const setGenderAndResetSpecific = (g: 'MALE' | 'FEMALE' | 'MASCOT') => {
+  const setGenderAndResetSpecific = (g: 'MALE' | 'FEMALE' | 'MASCOT' | 'NONE') => {
       setVoiceGender(g);
       setSpecificVoiceId('Auto');
+      
+      // Reset defaults suitable for the gender
+      if (g === 'MASCOT') setVoiceAge('CHILD'); // Default mascot to cute/childlike
+      else if (g !== 'NONE') setVoiceAge('ADULT');
   };
 
   const handleDictation = () => {
@@ -302,18 +306,25 @@ const VideoGenerator: React.FC = () => {
 
     // Priority 2: Auto Logic based on Buttons
     if (voiceGender === 'MASCOT') {
-        if (voiceAge === 'ADULT') return 'Zephyr'; // Map Male Mascot to Zephyr for funny cartoon tone
-        return 'Zephyr'; // Female/Cute mascot
+        // "Funny (Masc)" is mapped to ADULT in the state logic for reuse.
+        // Use PUCK for Male Mascot to ensure it sounds Male (Prompt will make it funny/cartoonish)
+        if (voiceAge === 'ADULT') return 'Puck';
+        
+        // Default Cute Mascot -> Zephyr (High Pitched)
+        return 'Zephyr'; 
     }
 
     if (voiceAge === 'CHILD') {
-        if (voiceGender === 'MALE') return 'Puck'; // Boy (Puck + prompts)
-        return 'Zephyr'; // Girl (Zephyr is naturally higher pitched)
+        // Explicitly map Child Male to Puck and Child Female to Zephyr
+        if (voiceGender === 'MALE') return 'Puck'; 
+        return 'Zephyr'; 
     }
     
     // Adult Logic
-    if (voiceGender === 'MALE') return 'Fenrir'; // Fenrir is Deep/Male.
-    return 'Kore'; // Kore is Female.
+    // Male Adult -> Fenrir (Deep/Authoritative)
+    if (voiceGender === 'MALE') return 'Fenrir'; 
+    // Female Adult -> Kore (Calm)
+    return 'Kore'; 
   };
 
   const handleAudioPreview = async () => {
@@ -383,7 +394,13 @@ const VideoGenerator: React.FC = () => {
 
       if (activeTab === 'avatar') {
           finalPrompt += ". Talking avatar style, focus on facial animation, lip sync with audio, natural movements.";
-          if (facialExpressiveness) finalPrompt += " High facial expressiveness, animated emotions.";
+          
+          // Facial Emotion
+          if (facialExpressiveness === 'happy') finalPrompt += " Smiling, cheerful expression, happy eyes.";
+          else if (facialExpressiveness === 'serious') finalPrompt += " Serious, professional, focused expression.";
+          else if (facialExpressiveness === 'surprised') finalPrompt += " Wide eyes, surprised, dynamic eyebrows.";
+          else finalPrompt += " Neutral, natural expression.";
+
           if (headMovement) finalPrompt += " Natural head movement, nodding, dynamic posture.";
           else finalPrompt += " Minimal head movement, steady camera.";
       }
@@ -397,17 +414,18 @@ const VideoGenerator: React.FC = () => {
       // Audio/Voice Logic
       const needsAudio = activeTab === 'avatar' || ((activeTab === 'main') && (mainPrompt.includes('fale') || mainPrompt.includes('say') || showVoiceSettings));
       
-      if (needsAudio) {
+      if (needsAudio && voiceGender !== 'NONE') {
           let voiceDescr = "";
-          let baseModel = getVoiceFromSettings(); // This now returns Fenrir for Male, Kore for Female, etc.
+          let baseModel = getVoiceFromSettings(); 
 
           // Build Description based on Gender/Age if in Auto mode, otherwise trust the specific voice name
           if (specificVoiceId === 'Auto') {
               if (voiceGender === 'MASCOT') {
                  if (voiceAge === 'ADULT') {
-                     // Explicit instruction for Funny Male Mascot using Zephyr
-                     voiceDescr = "Funny male cartoon mascot voice, energetic, squeaky but male tone, expressive, character voice";
+                     // Explicit instruction for Funny Male Mascot using PUCK (Male base) but shaped by prompt
+                     voiceDescr = "Funny male cartoon mascot voice, energetic, squeaky but definitely male tone, expressive, character voice, comedic timing";
                  } else {
+                     // Cute Mascot (Zephyr base)
                      voiceDescr = "HIGH-PITCHED, squeaky, cute talking animal voice, happy and smiling tone, cartoon character style";
                  }
               } else {
@@ -560,7 +578,7 @@ const VideoGenerator: React.FC = () => {
                             activeTab === 'avatar'
                             ? "Digite o roteiro que o avatar deve falar e descreva o comportamento (ex: sorrindo, acenando)..."
                             : activeTab === 'background'
-                            ? "Descreva a textura, o ambiente ou o loop abstrato para o fundo..."
+                            ? "Descreva a textura, o ambiente ou o loop abstrato para o fundo gerado pelo Veo..."
                             : "Descreva a história, o personagem ou o roteiro principal..."
                         }
                         className="w-full min-h-[120px] max-h-[200px] resize-none outline-none text-slate-700 placeholder:text-slate-400 text-xl bg-transparent p-2 pr-12 font-medium"
@@ -656,41 +674,30 @@ const VideoGenerator: React.FC = () => {
                     </div>
                 )}
                 
-                {/* Dedicated Avatar Upload CTA if in Avatar mode and no file */}
-                {activeTab === 'avatar' && !previewUrl && (
-                    <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="mt-4 border-2 border-dashed border-purple-200 bg-purple-50/50 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition-all group"
-                    >
-                        <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-purple-500 shadow-sm mb-2 group-hover:scale-110 transition-transform">
-                            <User size={24}/>
-                        </div>
-                        <p className="text-sm font-bold text-purple-900">Upload Foto do Avatar (Opcional)</p>
-                        <p className="text-xs text-purple-500">Se não enviar, a IA criará um personagem baseado no roteiro.</p>
-                    </div>
-                )}
-                
-                {/* NEW: Background Music Upload for Avatar Mode */}
+                {/* Dedicated Avatar Upload CTA if in Avatar mode */}
                 {activeTab === 'avatar' && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Facial Controls */}
-                        <div className="bg-purple-50/30 border border-purple-100 rounded-xl p-4">
-                             <p className="text-xs font-bold text-purple-700 mb-3 uppercase">Expressão Facial</p>
-                             <div className="flex flex-wrap gap-2">
-                                 <button 
-                                    onClick={() => setFacialExpressiveness(!facialExpressiveness)}
-                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${facialExpressiveness ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
-                                 >
-                                     {facialExpressiveness ? 'Expressiva (Alta)' : 'Sutil (Padrão)'}
-                                 </button>
-                                 <button 
-                                    onClick={() => setHeadMovement(!headMovement)}
-                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${headMovement ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
-                                 >
-                                     {headMovement ? 'Movimento Cabeça' : 'Estático'}
-                                 </button>
-                             </div>
-                        </div>
+                        {/* Avatar Image Upload Area */}
+                        {!previewUrl ? (
+                            <div 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="border-2 border-dashed border-purple-200 bg-purple-50/50 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-purple-50 hover:border-purple-300 transition-all group min-h-[120px]"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-purple-500 shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                                    <User size={20}/>
+                                </div>
+                                <p className="text-xs font-bold text-purple-900">Upload Avatar</p>
+                                <p className="text-[9px] text-purple-500 text-center">Imagem Própria</p>
+                            </div>
+                        ) : (
+                            <div className="relative rounded-xl overflow-hidden border border-purple-200 min-h-[120px] group">
+                                <img src={previewUrl} className="w-full h-full object-cover absolute inset-0"/>
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                                    <span className="text-white text-xs font-bold flex items-center gap-1"><UploadCloud size={12}/> Trocar</span>
+                                </div>
+                                <div className="absolute bottom-2 left-2 bg-purple-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">Avatar Personalizado</div>
+                            </div>
+                        )}
 
                         {/* Music Upload */}
                         <div 
@@ -702,9 +709,9 @@ const VideoGenerator: React.FC = () => {
                              </div>
                              <div className="min-w-0">
                                  <p className={`text-xs font-bold truncate ${bgMusicFile ? 'text-green-700' : 'text-slate-600'}`}>
-                                     {bgMusicFile ? bgMusicFile.name : "Trilha Sonora (Opcional)"}
+                                     {bgMusicFile ? bgMusicFile.name : "Trilha Sonora"}
                                  </p>
-                                 <p className="text-[9px] text-slate-400">{bgMusicFile ? "Clique para trocar" : "Upload MP3/WAV"}</p>
+                                 <p className="text-[9px] text-slate-400">{bgMusicFile ? "Clique para trocar" : "MP3/WAV (Opcional)"}</p>
                              </div>
                              {bgMusicFile && (
                                  <button onClick={(e) => { e.stopPropagation(); setBgMusicFile(null); }} className="ml-auto text-slate-400 hover:text-red-500">
@@ -715,8 +722,35 @@ const VideoGenerator: React.FC = () => {
                         </div>
                     </div>
                 )}
+                
+                {/* Facial Controls Row */}
+                {activeTab === 'avatar' && (
+                    <div className="mt-4 bg-purple-50/30 border border-purple-100 rounded-xl p-3">
+                         <div className="flex items-center justify-between mb-2">
+                             <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Expressão Facial</p>
+                         </div>
+                         <div className="flex flex-wrap gap-2">
+                             {['default', 'happy', 'serious', 'surprised'].map(emotion => (
+                                 <button 
+                                    key={emotion}
+                                    onClick={() => setFacialExpressiveness(emotion)}
+                                    className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-colors capitalize ${facialExpressiveness === emotion ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
+                                 >
+                                     {emotion === 'default' ? 'Natural' : emotion}
+                                 </button>
+                             ))}
+                             <div className="w-px h-4 bg-purple-200 mx-1"></div>
+                             <button 
+                                onClick={() => setHeadMovement(!headMovement)}
+                                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-colors ${headMovement ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
+                             >
+                                 {headMovement ? 'Movimento Cabeça (ON)' : 'Cabeça Estática'}
+                             </button>
+                         </div>
+                    </div>
+                )}
 
-                {/* Voice Settings Panel - Auto shown in Avatar mode or toggled */}
+                {/* Voice Settings Panel */}
                 {(showVoiceSettings || activeTab === 'avatar') && (
                   <div className="mt-6 p-5 bg-slate-50/80 backdrop-blur-sm rounded-2xl border border-slate-200 animate-in slide-in-from-top-2">
                       <div className="flex items-center justify-between mb-4">
@@ -738,11 +772,11 @@ const VideoGenerator: React.FC = () => {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div>
-                              <label className="text-xs font-semibold text-slate-700 mb-2 block">Tipo de Voz</label>
-                              <div className="flex bg-white rounded-xl border border-slate-200 p-1.5 shadow-sm">
+                              <label className="text-xs font-semibold text-slate-700 mb-2 block">Gênero</label>
+                              <div className="flex bg-white rounded-xl border border-slate-200 p-1.5 shadow-sm overflow-x-auto">
                                   <button
                                       onClick={() => setGenderAndResetSpecific('FEMALE')}
-                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all px-2 whitespace-nowrap ${
                                           voiceGender === 'FEMALE' ? 'bg-pink-100 text-pink-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
                                       }`}
                                   >
@@ -750,7 +784,7 @@ const VideoGenerator: React.FC = () => {
                                   </button>
                                   <button
                                       onClick={() => setGenderAndResetSpecific('MALE')}
-                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all px-2 whitespace-nowrap ${
                                           voiceGender === 'MALE' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
                                       }`}
                                   >
@@ -758,11 +792,19 @@ const VideoGenerator: React.FC = () => {
                                   </button>
                                   <button
                                       onClick={() => setGenderAndResetSpecific('MASCOT')}
-                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all px-2 whitespace-nowrap ${
                                           voiceGender === 'MASCOT' ? 'bg-orange-100 text-orange-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
                                       }`}
                                   >
                                       <Cat size={12} className="inline mr-1"/> Mascote
+                                  </button>
+                                  <button
+                                      onClick={() => setGenderAndResetSpecific('NONE')}
+                                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all px-2 whitespace-nowrap ${
+                                          voiceGender === 'NONE' ? 'bg-slate-200 text-slate-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+                                      }`}
+                                  >
+                                      <Mic size={12} className="inline mr-1 text-slate-400"/> Sem Voz
                                   </button>
                               </div>
                           </div>
@@ -789,9 +831,11 @@ const VideoGenerator: React.FC = () => {
                                                 voiceAge === 'ADULT' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'
                                             }`}
                                         >
-                                            <Zap size={12} className="inline mr-1"/> Masculino
+                                            <Zap size={12} className="inline mr-1"/> Divertido (Masc)
                                         </button>
                                       </>
+                                  ) : voiceGender === 'NONE' ? (
+                                      <div className="flex-1 py-2 text-xs text-slate-400 text-center italic">Nenhuma opção</div>
                                   ) : (
                                       <>
                                         <button
@@ -817,78 +861,90 @@ const VideoGenerator: React.FC = () => {
                       </div>
 
                       {/* Pitch and Speed Controls */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                              <label className="text-xs font-semibold text-slate-700 mb-1 block">Tom (Pitch)</label>
-                              <input 
-                                type="range" min="-20" max="20" value={voicePitch} 
-                                onChange={e => setVoicePitch(parseInt(e.target.value))}
-                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                              />
-                              <div className="flex justify-between text-[9px] text-slate-400 mt-1">
-                                  <span>Grave</span>
-                                  <span>Agudo</span>
-                              </div>
-                          </div>
-                          <div>
-                              <label className="text-xs font-semibold text-slate-700 mb-1 block">Velocidade</label>
-                              <input 
-                                type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} 
-                                onChange={e => setVoiceSpeed(parseFloat(e.target.value))}
-                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                              />
-                              <div className="flex justify-between text-[9px] text-slate-400 mt-1">
-                                  <span>Lento</span>
-                                  <span>Rápido</span>
-                              </div>
-                          </div>
-                      </div>
+                      {voiceGender !== 'NONE' && (
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <div className="flex justify-between mb-1">
+                                    <label className="text-xs font-semibold text-slate-700">Tom (Pitch)</label>
+                                    <span className="text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded">{voicePitch}</span>
+                                </div>
+                                <input 
+                                    type="range" min="-20" max="20" value={voicePitch} 
+                                    onChange={e => setVoicePitch(parseInt(e.target.value))}
+                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                />
+                                <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+                                    <span>Grave</span>
+                                    <span>Agudo</span>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-1">
+                                    <label className="text-xs font-semibold text-slate-700">Velocidade</label>
+                                    <span className="text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded">{voiceSpeed}x</span>
+                                </div>
+                                <input 
+                                    type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} 
+                                    onChange={e => setVoiceSpeed(parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                />
+                                <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+                                    <span>Lento</span>
+                                    <span>Rápido</span>
+                                </div>
+                            </div>
+                        </div>
+                      )}
                       
                        {/* EMOTIONS SECTION */}
-                      <div className="mb-4">
-                          <label className="text-xs font-semibold text-slate-700 mb-2 block flex items-center gap-1">
-                             <Heart size={10}/> Emoção e Atmosfera
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                              {VOICE_EMOTIONS_PRESETS.map((preset, idx) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() => setVoiceStyle(prev => `${prev ? prev + ', ' : ''}${preset.prompt}`)}
-                                    className="text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent transition-colors"
-                                  >
-                                      {preset.label}
-                                  </button>
-                              ))}
-                          </div>
-                      </div>
-
-                      <div>
-                          <label className="text-xs font-semibold text-slate-700 mb-2 block flex items-center gap-1">
-                               Personalização Livre
-                          </label>
-                          
-                          <input
-                               type="text"
-                               value={voiceStyle}
-                               onChange={(e) => setVoiceStyle(e.target.value)}
-                               placeholder={voiceGender === 'MASCOT' ? "Ex: Voz de Quokka sorridente, muito fofo..." : "Ex: Voz rouca e sussurrada, tom muito alegre..."}
-                               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-                          />
-
-                          {voiceGender === 'MASCOT' && (
-                             <div className="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
-                                {['Estilo Quokka (Feliz)', 'Voz de Hélio', 'Robótico Fofo', 'Tagarela', 'Risadinha', 'Sussurro Fofo'].map(tag => (
-                                    <button 
-                                      key={tag} 
-                                      onClick={() => setVoiceStyle(prev => prev ? prev + ", " + tag : tag)}
-                                      className="text-[10px] font-bold px-2 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-lg hover:bg-orange-100 whitespace-nowrap flex items-center gap-1"
+                      {voiceGender !== 'NONE' && (
+                        <div className="mb-4">
+                            <label className="text-xs font-semibold text-slate-700 mb-2 block flex items-center gap-1">
+                                <Heart size={10}/> Emoção e Atmosfera
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {VOICE_EMOTIONS_PRESETS.map((preset, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setVoiceStyle(prev => `${prev ? prev + ', ' : ''}${preset.prompt}`)}
+                                        className="text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 border border-transparent transition-colors"
                                     >
-                                        <Wand2 size={10}/> {tag}
+                                        {preset.label}
                                     </button>
                                 ))}
-                             </div>
-                          )}
-                      </div>
+                            </div>
+                        </div>
+                      )}
+
+                      {voiceGender !== 'NONE' && (
+                        <div>
+                            <label className="text-xs font-semibold text-slate-700 mb-2 block flex items-center gap-1">
+                                Personalização Livre
+                            </label>
+                            
+                            <input
+                                type="text"
+                                value={voiceStyle}
+                                onChange={(e) => setVoiceStyle(e.target.value)}
+                                placeholder={voiceGender === 'MASCOT' ? "Ex: Voz de Quokka sorridente, muito fofo..." : "Ex: Voz rouca e sussurrada, tom muito alegre..."}
+                                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                            />
+
+                            {voiceGender === 'MASCOT' && (
+                                <div className="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
+                                    {['Estilo Quokka (Feliz)', 'Voz de Hélio', 'Robótico Fofo', 'Tagarela', 'Risadinha', 'Sussurro Fofo'].map(tag => (
+                                        <button 
+                                        key={tag} 
+                                        onClick={() => setVoiceStyle(prev => prev ? prev + ", " + tag : tag)}
+                                        className="text-[10px] font-bold px-2 py-1 bg-orange-50 text-orange-600 border border-orange-100 rounded-lg hover:bg-orange-100 whitespace-nowrap flex items-center gap-1"
+                                        >
+                                            <Wand2 size={10}/> {tag}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                      )}
                   </div>
                 )}
 
