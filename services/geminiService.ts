@@ -18,6 +18,23 @@ const cleanJSON = (text: string): string => {
 };
 
 /**
+ * Helper to normalize MIME types for Veo API which is strict.
+ */
+const normalizeMimeType = (mimeType: string): string => {
+  if (mimeType === 'image/jpg') return 'image/jpeg';
+  // Veo primarily supports png and jpeg. WebP might be supported but jpeg is safer fallback if unsure.
+  if (!mimeType || (!mimeType.includes('image/'))) return 'image/png';
+  return mimeType;
+};
+
+/**
+ * Helper to clean Base64 string
+ */
+const cleanBase64 = (b64: string): string => {
+  return b64.replace(/\s/g, '');
+};
+
+/**
  * Enhances a simple user prompt into a detailed prompt for image/video generation.
  */
 export const enhancePrompt = async (simplePrompt: string): Promise<string> => {
@@ -40,10 +57,14 @@ export const enhancePrompt = async (simplePrompt: string): Promise<string> => {
 
 /**
  * Analyzes an image to determine the subject type and appropriate voice persona.
+ * Handles Quota (429) and Auth errors by prompting for a new key.
  */
 export const detectVoicePersona = async (imageBase64: string): Promise<{ type: string; voicePrompt: string; label: string }> => {
-  const ai = getAI();
-  try {
+  
+  const executeDetection = async () => {
+    // Create fresh instance to pick up potentially new key
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const prompt = `
       Analyze the main subject in this image for a "Talking Photo" video.
       Determine if the subject is a:
@@ -74,8 +95,34 @@ export const detectVoicePersona = async (imageBase64: string): Promise<{ type: s
     const text = response.text;
     if (!text) return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
     return JSON.parse(cleanJSON(text));
-  } catch (error) {
-    console.error("Error detecting voice persona:", error);
+  };
+
+  try {
+    return await executeDetection();
+  } catch (error: any) {
+    console.warn("Error detecting voice persona:", error.message);
+    
+    const errorMessage = error.message || JSON.stringify(error);
+    const isQuotaError = errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || error.status === "RESOURCE_EXHAUSTED" || error.code === 429;
+    const isKeyInvalidError = errorMessage.includes("API key expired") || errorMessage.includes("API_KEY_INVALID") || error.code === 400;
+
+    if (isQuotaError || isKeyInvalidError) {
+       console.warn("Quota/Key error in detection. Prompting for key...");
+       if (window.aistudio && window.aistudio.openSelectKey) {
+        try {
+            await window.aistudio.openSelectKey();
+            // Add delay to help with rate limits (RPM) before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return await executeDetection();
+        } catch (retryError) {
+            console.warn("Retry failed, returning default persona:", retryError);
+            // Graceful fallback to prevent UI crash
+            return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
+        }
+      }
+    }
+    
+    // Fallback return to prevent UI crash
     return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
   }
 };
@@ -233,8 +280,8 @@ export const generateFastImage = async (prompt: string, imageBase64?: string, mi
     if (imageBase64) {
         parts.push({
             inlineData: {
-                mimeType: mimeType,
-                data: imageBase64
+                mimeType: normalizeMimeType(mimeType),
+                data: cleanBase64(imageBase64)
             }
         });
     }
@@ -312,7 +359,7 @@ export const transcribeUserAudio = async (audioBase64: string): Promise<string> 
       model: "gemini-2.5-flash",
       contents: {
         parts: [
-          { inlineData: { mimeType: 'audio/wav', data: audioBase64 } }, // Gemini handles wav/mp3 inputs
+          { inlineData: { mimeType: 'audio/wav', data: cleanBase64(audioBase64) } }, // Gemini handles wav/mp3 inputs
           { text: "Transcribe this audio exactly as spoken. Return only the text." }
         ]
       }
@@ -325,30 +372,63 @@ export const transcribeUserAudio = async (audioBase64: string): Promise<string> 
 };
 
 /**
+ * Analyzes audio style for voice cloning (Simulation/Prompting)
+ */
+export const analyzeVoiceStyle = async (audioBase64: string): Promise<string> => {
+  const ai = getAI();
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          { inlineData: { mimeType: 'audio/mp3', data: cleanBase64(audioBase64) } },
+          { text: "Analyze this voice recording. Describe the speaker's gender, approximate age, tone (e.g. cheerful, serious), and speaking style in 5-10 words." }
+        ]
+      }
+    });
+    return response.text || "Cloned Voice Style";
+  } catch (error) {
+    console.warn("Voice analysis failed, using default label.");
+    return "Cloned Voice Style";
+  }
+}
+
+/**
  * Generates a Video using Veo.
  * Handles API Key errors specifically.
  */
-export const generateVideo = async (prompt: string, imageBase64?: string, modelId: string = 'veo-3.1-fast-generate-preview') => {
+export const generateVideo = async (
+    prompt: string, 
+    imageBase64?: string,
+    mimeType: string = 'image/png',
+    modelId: string = 'veo-3.1-fast-generate-preview',
+    resolution: string = '720p'
+) => {
   
   const executeGeneration = async () => {
     // New instance for fresh key
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    console.log("Starting Veo generation with model:", modelId);
+    const cleanMime = normalizeMimeType(mimeType);
     
+    console.log("Starting Veo generation with model:", modelId, "Res:", resolution, "Mime:", cleanMime);
+    
+    // Map '4k' to '1080p' as 4k is not fully supported in this preview tier, but we pass the best available.
+    const apiResolution = resolution === '4k' ? '1080p' : resolution;
+
     const request: any = {
       model: modelId,
       prompt: prompt, 
       config: {
         numberOfVideos: 1,
-        resolution: '720p', 
+        resolution: apiResolution, 
         aspectRatio: '16:9' 
       }
     };
 
     if (imageBase64) {
       request.image = {
-        imageBytes: imageBase64,
-        mimeType: 'image/png', 
+        imageBytes: cleanBase64(imageBase64),
+        mimeType: cleanMime, 
       };
     }
 
@@ -359,8 +439,15 @@ export const generateVideo = async (prompt: string, imageBase64?: string, modelI
       operation = await ai.operations.getVideosOperation({operation: operation});
     }
 
+    if (operation.error) {
+      throw new Error(`Video generation operation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
+    }
+
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("No video URI returned");
+    if (!downloadLink) {
+        console.error("Operation finished but no link:", JSON.stringify(operation));
+        throw new Error("No video URI returned from Veo API");
+    }
 
     const videoRes = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
     const blob = await videoRes.blob();
@@ -376,13 +463,21 @@ export const generateVideo = async (prompt: string, imageBase64?: string, modelI
     const isQuotaError = errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || error.status === "RESOURCE_EXHAUSTED" || error.code === 429;
     const isEntityNotFoundError = errorMessage.includes("Requested entity was not found") || error.code === 404;
     const isKeyInvalidError = errorMessage.includes("API key expired") || errorMessage.includes("API_KEY_INVALID") || error.code === 400;
+    const isArgumentError = errorMessage.includes("INVALID_ARGUMENT") || error.code === 400;
 
     if (isEntityNotFoundError || isQuotaError || isKeyInvalidError) {
       console.warn("Veo API Error (Key/Quota/Invalid). Prompting user to select key again...");
       if (window.aistudio && window.aistudio.openSelectKey) {
-        await window.aistudio.openSelectKey();
-        console.log("Retrying video generation after key selection...");
-        return await executeGeneration();
+        try {
+            await window.aistudio.openSelectKey();
+            // Add delay for rate limits
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log("Retrying video generation after key selection...");
+            return await executeGeneration();
+        } catch (retryError) {
+             console.error("Retry failed for video generation:", retryError);
+             throw retryError;
+        }
       }
     }
     throw error;
@@ -458,7 +553,7 @@ export const analyzeVideo = async (prompt: string, videoBase64: string, mimeType
             model: 'gemini-3-pro-preview',
             contents: {
                 parts: [
-                    { inlineData: { mimeType, data: videoBase64 } },
+                    { inlineData: { mimeType, data: cleanBase64(videoBase64) } },
                     { text: prompt }
                 ]
             }

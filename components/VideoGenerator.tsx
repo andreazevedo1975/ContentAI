@@ -30,7 +30,11 @@ import {
   Link as LinkIcon,
   Facebook,
   Linkedin,
-  Twitter
+  Twitter,
+  Monitor,
+  Aperture,
+  Captions,
+  UploadCloud
 } from 'lucide-react';
 
 // --- Constants ---
@@ -95,6 +99,9 @@ const VideoGenerator: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const musicInputRef = useRef<HTMLInputElement>(null); // Ref for music upload
+  const videoPlayerRef = useRef<HTMLVideoElement>(null); // Ref for sync
+  const audioPlayerRef = useRef<HTMLAudioElement>(null); // Ref for sync
   
   // State for Prompts
   const [activeTab, setActiveTab] = useState<'main' | 'background' | 'avatar'>('main');
@@ -104,11 +111,19 @@ const VideoGenerator: React.FC = () => {
   // Other State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // Music Upload State
+  const [bgMusicFile, setBgMusicFile] = useState<File | null>(null);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [durationMode, setDurationMode] = useState<'auto' | 'short' | 'long'>('auto');
   
+  // NEW: Resolution and FPS
+  const [resolution, setResolution] = useState<'720p' | '1080p' | '4k'>('720p');
+  const [fps, setFps] = useState<'24' | '30' | '60'>('30');
+
   // Mode: false = High Quality, true = Lite (Fast/Preview)
   const [isLiteMode, setIsLiteMode] = useState(false);
   
@@ -124,9 +139,21 @@ const VideoGenerator: React.FC = () => {
   // NEW: Specific Voice Selector
   const [specificVoiceId, setSpecificVoiceId] = useState('Auto');
 
+  // New Voice Settings: Pitch and Speed
+  const [voicePitch, setVoicePitch] = useState(0); // -20 to 20
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0); // 0.5 to 2.0
+
   // Voice/Persona Detection State (Auto)
   const [voiceAnalysis, setVoiceAnalysis] = useState<{ label: string; voicePrompt: string; type: string } | null>(null);
   const [isAnalyzingVoice, setIsAnalyzingVoice] = useState(false);
+  
+  // Captions
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [captionsLanguage, setCaptionsLanguage] = useState('pt-BR');
+  
+  // Avatar Facial Animation
+  const [facialExpressiveness, setFacialExpressiveness] = useState(false);
+  const [headMovement, setHeadMovement] = useState(false);
 
   // Share Menu State
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -254,6 +281,13 @@ const VideoGenerator: React.FC = () => {
     }
   };
 
+  const handleMusicSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setBgMusicFile(file);
+      }
+  };
+
   const handleRemoveFile = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -268,7 +302,7 @@ const VideoGenerator: React.FC = () => {
 
     // Priority 2: Auto Logic based on Buttons
     if (voiceGender === 'MASCOT') {
-        if (voiceAge === 'ADULT') return 'Puck'; // Male mascot (using Puck as base)
+        if (voiceAge === 'ADULT') return 'Zephyr'; // Map Male Mascot to Zephyr for funny cartoon tone
         return 'Zephyr'; // Female/Cute mascot
     }
 
@@ -278,7 +312,7 @@ const VideoGenerator: React.FC = () => {
     }
     
     // Adult Logic
-    if (voiceGender === 'MALE') return 'Fenrir'; // Fenrir is Deep/Male. Puck is softer.
+    if (voiceGender === 'MALE') return 'Fenrir'; // Fenrir is Deep/Male.
     return 'Kore'; // Kore is Female.
   };
 
@@ -325,8 +359,10 @@ const VideoGenerator: React.FC = () => {
       }
 
       let imageBase64 = undefined;
+      let mimeType = 'image/png';
       if (previewUrl) {
         imageBase64 = previewUrl.split(',')[1];
+        if (selectedFile) mimeType = selectedFile.type;
       }
 
       const wordCount = currentPrompt.split(/\s+/).length;
@@ -347,6 +383,9 @@ const VideoGenerator: React.FC = () => {
 
       if (activeTab === 'avatar') {
           finalPrompt += ". Talking avatar style, focus on facial animation, lip sync with audio, natural movements.";
+          if (facialExpressiveness) finalPrompt += " High facial expressiveness, animated emotions.";
+          if (headMovement) finalPrompt += " Natural head movement, nodding, dynamic posture.";
+          else finalPrompt += " Minimal head movement, steady camera.";
       }
 
       if (shouldBeLong) {
@@ -366,7 +405,8 @@ const VideoGenerator: React.FC = () => {
           if (specificVoiceId === 'Auto') {
               if (voiceGender === 'MASCOT') {
                  if (voiceAge === 'ADULT') {
-                     voiceDescr = "MALE MASCOT VOICE, funny cartoon character, energetic, slightly deeper but playful tone";
+                     // Explicit instruction for Funny Male Mascot using Zephyr
+                     voiceDescr = "Funny male cartoon mascot voice, energetic, squeaky but male tone, expressive, character voice";
                  } else {
                      voiceDescr = "HIGH-PITCHED, squeaky, cute talking animal voice, happy and smiling tone, cartoon character style";
                  }
@@ -391,11 +431,33 @@ const VideoGenerator: React.FC = () => {
               voiceDescr += `, specific tone: ${voiceStyle}`;
           }
 
+          // Add Pitch and Speed to prompt
+          if (voicePitch !== 0) {
+              const pitchDesc = voicePitch > 0 ? "high pitch" : "low pitch";
+              voiceDescr += `, ${pitchDesc}`;
+          }
+          if (voiceSpeed !== 1.0) {
+              const speedDesc = voiceSpeed > 1.0 ? "fast speaking rate" : "slow speaking rate";
+              voiceDescr += `, ${speedDesc}`;
+          }
+
           finalPrompt += `. AUDIO STYLE STRICTLY DEFINED AS: ${voiceDescr} (Base Model: ${baseModel}).`;
       }
 
+      // Captions Logic
+      if (captionsEnabled) {
+          finalPrompt += `. Include auto-generated captions in ${captionsLanguage}, stylish font, bottom center placement.`;
+      }
+      
+      // FPS Logic
+      if (fps === '60') {
+          finalPrompt += ", smooth motion, 60fps, high frame rate, fluid animation.";
+      } else if (fps === '24') {
+          finalPrompt += ", cinematic motion, 24fps, film look, traditional cinema frame rate.";
+      }
 
-      const videoUri = await generateVideo(finalPrompt, imageBase64, modelId);
+      // Pass resolution to service
+      const videoUri = await generateVideo(finalPrompt, imageBase64, mimeType, modelId, resolution);
       setGeneratedVideo(videoUri);
 
     } catch (error) {
@@ -414,6 +476,21 @@ const VideoGenerator: React.FC = () => {
       }
   };
 
+  // Sync Audio and Video in Result View
+  const syncPlay = () => {
+      audioPlayerRef.current?.play();
+  };
+  const syncPause = () => {
+      audioPlayerRef.current?.pause();
+  };
+  const syncTime = () => {
+      if (videoPlayerRef.current && audioPlayerRef.current) {
+          if (Math.abs(videoPlayerRef.current.currentTime - audioPlayerRef.current.currentTime) > 0.3) {
+             audioPlayerRef.current.currentTime = videoPlayerRef.current.currentTime;
+          }
+      }
+  };
+
   const currentPromptValue = (activeTab === 'main' || activeTab === 'avatar') ? mainPrompt : bgPrompt;
   const setCurrentPromptValue = (val: string) => (activeTab === 'main' || activeTab === 'avatar') ? setMainPrompt(val) : setBgPrompt(val);
 
@@ -423,6 +500,20 @@ const VideoGenerator: React.FC = () => {
           case 'short': return 'Curta';
           default: return 'Auto';
       }
+  };
+
+  // Cycle Resolution
+  const cycleResolution = () => {
+      if (resolution === '720p') setResolution('1080p');
+      else if (resolution === '1080p') setResolution('4k');
+      else setResolution('720p');
+  };
+
+  // Cycle FPS
+  const cycleFps = () => {
+      if (fps === '30') setFps('60');
+      else if (fps === '60') setFps('24');
+      else setFps('30');
   };
 
   return (
@@ -578,6 +669,52 @@ const VideoGenerator: React.FC = () => {
                         <p className="text-xs text-purple-500">Se não enviar, a IA criará um personagem baseado no roteiro.</p>
                     </div>
                 )}
+                
+                {/* NEW: Background Music Upload for Avatar Mode */}
+                {activeTab === 'avatar' && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Facial Controls */}
+                        <div className="bg-purple-50/30 border border-purple-100 rounded-xl p-4">
+                             <p className="text-xs font-bold text-purple-700 mb-3 uppercase">Expressão Facial</p>
+                             <div className="flex flex-wrap gap-2">
+                                 <button 
+                                    onClick={() => setFacialExpressiveness(!facialExpressiveness)}
+                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${facialExpressiveness ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
+                                 >
+                                     {facialExpressiveness ? 'Expressiva (Alta)' : 'Sutil (Padrão)'}
+                                 </button>
+                                 <button 
+                                    onClick={() => setHeadMovement(!headMovement)}
+                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${headMovement ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-white text-slate-500 border-slate-200'}`}
+                                 >
+                                     {headMovement ? 'Movimento Cabeça' : 'Estático'}
+                                 </button>
+                             </div>
+                        </div>
+
+                        {/* Music Upload */}
+                        <div 
+                            onClick={() => musicInputRef.current?.click()}
+                            className={`border border-dashed rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors ${bgMusicFile ? 'bg-green-50 border-green-300' : 'bg-white/50 border-slate-200 hover:bg-slate-50'}`}
+                        >
+                             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${bgMusicFile ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+                                 <Music size={18}/>
+                             </div>
+                             <div className="min-w-0">
+                                 <p className={`text-xs font-bold truncate ${bgMusicFile ? 'text-green-700' : 'text-slate-600'}`}>
+                                     {bgMusicFile ? bgMusicFile.name : "Trilha Sonora (Opcional)"}
+                                 </p>
+                                 <p className="text-[9px] text-slate-400">{bgMusicFile ? "Clique para trocar" : "Upload MP3/WAV"}</p>
+                             </div>
+                             {bgMusicFile && (
+                                 <button onClick={(e) => { e.stopPropagation(); setBgMusicFile(null); }} className="ml-auto text-slate-400 hover:text-red-500">
+                                     <X size={14}/>
+                                 </button>
+                             )}
+                             <input type="file" ref={musicInputRef} accept="audio/*" onChange={handleMusicSelect} className="hidden"/>
+                        </div>
+                    </div>
+                )}
 
                 {/* Voice Settings Panel - Auto shown in Avatar mode or toggled */}
                 {(showVoiceSettings || activeTab === 'avatar') && (
@@ -678,6 +815,34 @@ const VideoGenerator: React.FC = () => {
                               </div>
                           </div>
                       </div>
+
+                      {/* Pitch and Speed Controls */}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                              <label className="text-xs font-semibold text-slate-700 mb-1 block">Tom (Pitch)</label>
+                              <input 
+                                type="range" min="-20" max="20" value={voicePitch} 
+                                onChange={e => setVoicePitch(parseInt(e.target.value))}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                              />
+                              <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+                                  <span>Grave</span>
+                                  <span>Agudo</span>
+                              </div>
+                          </div>
+                          <div>
+                              <label className="text-xs font-semibold text-slate-700 mb-1 block">Velocidade</label>
+                              <input 
+                                type="range" min="0.5" max="2.0" step="0.1" value={voiceSpeed} 
+                                onChange={e => setVoiceSpeed(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                              />
+                              <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+                                  <span>Lento</span>
+                                  <span>Rápido</span>
+                              </div>
+                          </div>
+                      </div>
                       
                        {/* EMOTIONS SECTION */}
                       <div className="mb-4">
@@ -746,6 +911,28 @@ const VideoGenerator: React.FC = () => {
                         >
                             <Volume2 size={18} />
                         </button>
+                        
+                        {/* Auto Captions Group */}
+                         <div className={`flex items-center rounded-full transition-all border ${captionsEnabled ? 'bg-indigo-50 border-indigo-200 pl-1 pr-3 gap-2' : 'bg-white border-slate-200'}`}>
+                             <button
+                                onClick={() => setCaptionsEnabled(!captionsEnabled)}
+                                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all shrink-0 ${captionsEnabled ? 'text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                                title="Legendas Automáticas"
+                            >
+                                <Captions size={18} />
+                            </button>
+                            {captionsEnabled && (
+                                <select
+                                    value={captionsLanguage}
+                                    onChange={(e) => setCaptionsLanguage(e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-indigo-700 outline-none cursor-pointer appearance-none"
+                                >
+                                    <option value="pt-BR">PT-BR</option>
+                                    <option value="en-US">EN-US</option>
+                                    <option value="es-ES">ES-ES</option>
+                                </select>
+                            )}
+                         </div>
 
                         <div className="h-6 w-px bg-slate-200 mx-2 shrink-0"></div>
 
@@ -792,6 +979,28 @@ const VideoGenerator: React.FC = () => {
                                 <Clock size={14} />
                             </button>
                             <span className="text-[10px] font-bold text-slate-400 px-1 min-w-[30px] text-center">{getDurationLabel()}</span>
+                            
+                             <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                            {/* Resolution Selector */}
+                            <button 
+                                onClick={cycleResolution}
+                                className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:text-indigo-600"
+                                title="Resolução"
+                            >
+                                <Monitor size={14} />
+                            </button>
+                            <span className="text-[10px] font-bold text-slate-400 px-1 min-w-[30px] text-center">{resolution}</span>
+
+                            {/* FPS Selector */}
+                            <button 
+                                onClick={cycleFps}
+                                className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:text-indigo-600"
+                                title="Frame Rate"
+                            >
+                                <Aperture size={14} />
+                            </button>
+                            <span className="text-[10px] font-bold text-slate-400 px-1 min-w-[30px] text-center">{fps}</span>
                         </div>
                     </div>
 
@@ -890,7 +1099,21 @@ const VideoGenerator: React.FC = () => {
             </div>
             
             <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl shadow-indigo-900/20 aspect-video relative group ring-4 ring-white">
-                 <video src={generatedVideo} controls autoPlay loop className="w-full h-full object-contain" />
+                 <video 
+                    ref={videoPlayerRef}
+                    src={generatedVideo} 
+                    controls 
+                    autoPlay 
+                    loop 
+                    className="w-full h-full object-contain" 
+                    onPlay={() => audioPlayerRef.current?.play()}
+                    onPause={() => audioPlayerRef.current?.pause()}
+                    onTimeUpdate={syncTime}
+                 />
+                 {/* Hidden Audio Player for Background Music Sync */}
+                 {bgMusicFile && (
+                     <audio ref={audioPlayerRef} src={URL.createObjectURL(bgMusicFile)} loop volume={0.2} />
+                 )}
             </div>
             <div className="mt-6 flex justify-center">
                  <a href={generatedVideo} download="video-gerado.mp4" className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">

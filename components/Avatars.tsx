@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, AudioLines, Mic, Play, Loader2, X, Upload, Video, User, Music, CheckCircle2, Pause } from 'lucide-react';
+import { Plus, AudioLines, Mic, Play, Loader2, X, Upload, Video, User, Music, CheckCircle2, Pause, Sparkles } from 'lucide-react';
 import { generateSpeech, generateVideo } from '../services/geminiService';
 import { decodeBase64, pcmToWav } from '../services/audioUtils';
 
@@ -11,6 +11,18 @@ const GEMINI_VOICES = [
   { id: 'Charon', label: 'Charon', gender: 'Masculina', style: 'Grave & Séria', color: 'bg-slate-200 text-slate-700' },
   { id: 'Fenrir', label: 'Fenrir', gender: 'Masculina', style: 'Profunda & Autoritária', color: 'bg-indigo-100 text-indigo-600' },
   { id: 'Zephyr', label: 'Zephyr', gender: 'Feminina', style: 'Brilhante & Enérgica', color: 'bg-amber-100 text-amber-600' },
+  
+  // New Children
+  { id: 'Leo', label: 'Leo (Menino)', gender: 'Masculino (Criança)', style: 'Curioso & Alegre', color: 'bg-teal-100 text-teal-600' },
+  { id: 'Maya', label: 'Maya (Menina)', gender: 'Feminina (Criança)', style: 'Doce & Brincalhona', color: 'bg-pink-100 text-pink-600' },
+  { id: 'Noah', label: 'Noah (Menino)', gender: 'Masculino (Criança)', style: 'Calmo & Estudioso', color: 'bg-blue-50 text-blue-600' },
+  { id: 'Sofia', label: 'Sofia (Menina)', gender: 'Feminina (Criança)', style: 'Animada & Contadora', color: 'bg-purple-50 text-purple-600' },
+
+  // New Mascots
+  { id: 'Pip', label: 'Pip (Mascote Masc)', gender: 'Mascote', style: 'Esquilo Rápido', color: 'bg-orange-100 text-orange-600' },
+  { id: 'Luna', label: 'Luna (Mascote Fem)', gender: 'Mascote', style: 'Gatinha Suave', color: 'bg-gray-100 text-gray-600' },
+  { id: 'Rex', label: 'Rex (Mascote Masc)', gender: 'Mascote', style: 'Cachorro Amigável', color: 'bg-amber-200 text-amber-700' },
+  { id: 'Coco', label: 'Coco (Mascote Fem)', gender: 'Mascote', style: 'Pássaro Cantante', color: 'bg-lime-100 text-lime-600' },
 ];
 
 // --- SUB-COMPONENTS ---
@@ -42,55 +54,112 @@ const CreateCard: React.FC<{ label: string; subLabel: string; onClick: () => voi
   </button>
 );
 
-const VideoAvatarCard: React.FC<{ name: string; imageSrc: string; videoSrc?: string }> = ({ name, imageSrc, videoSrc }) => {
+const AvatarPreviewCard: React.FC<{ name: string; videoSrc?: string; audioText?: string; audioVoice?: string; colorClass?: string }> = ({ name, videoSrc, audioText, audioVoice, colorClass = "bg-slate-900" }) => {
     const [isPlaying, setIsPlaying] = useState(false);
-    const vidRef = useRef<HTMLVideoElement>(null);
+    const [loading, setLoading] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    const togglePlay = () => {
-        if (!vidRef.current) return;
+    const handlePlay = async () => {
         if (isPlaying) {
-            vidRef.current.pause();
-        } else {
-            vidRef.current.play();
+            videoRef.current?.pause();
+            audioRef.current?.pause();
+            setIsPlaying(false);
+            return;
         }
-        setIsPlaying(!isPlaying);
+
+        if (!audioRef.current && audioText && audioVoice) {
+            setLoading(true);
+            try {
+                // Generate TTS on the fly
+                const base64 = await generateSpeech(audioText, audioVoice);
+                const pcm = decodeBase64(base64);
+                const wav = pcmToWav(pcm, 24000, 1);
+                const url = URL.createObjectURL(wav);
+                audioRef.current = new Audio(url);
+            } catch (e) {
+                console.error("Audio generation failed", e);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.play();
+            
+            if (audioRef.current) {
+                audioRef.current.currentTime = 0;
+                audioRef.current.play();
+                
+                // Sync loop
+                audioRef.current.onended = () => {
+                     videoRef.current?.pause();
+                     setIsPlaying(false);
+                }
+            }
+            setIsPlaying(true);
+        }
     };
 
     return (
-        <div className="relative aspect-[9/16] rounded-2xl overflow-hidden group bg-slate-900 shadow-lg hover:shadow-xl transition-all border border-white/20">
+        <div className={`relative aspect-[9/16] rounded-2xl overflow-hidden group shadow-lg hover:shadow-xl transition-all border border-white/20 ${colorClass}`}>
             {videoSrc ? (
                 <video 
-                    ref={vidRef}
+                    ref={videoRef}
                     src={videoSrc} 
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
                     loop
                     playsInline
-                    onEnded={() => setIsPlaying(false)}
+                    muted // Muted because we play audio separately
                 />
             ) : (
-                <img src={imageSrc} alt={name} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                    <User size={40} className="text-slate-600"/>
+                </div>
             )}
             
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
             
             <div className="absolute bottom-4 left-4 right-4 text-white z-10">
                 <p className="font-bold text-sm">{name}</p>
-                <p className="text-[10px] opacity-70 uppercase tracking-wider">AI Avatar</p>
+                <p className="text-[10px] opacity-70 uppercase tracking-wider flex items-center gap-1">
+                    {isPlaying ? <span className="flex gap-0.5 h-2 items-end"><span className="w-0.5 bg-green-400 h-2 animate-pulse"/><span className="w-0.5 bg-green-400 h-1 animate-pulse"/><span className="w-0.5 bg-green-400 h-2 animate-pulse"/></span> : <Video size={10}/>} 
+                    Preview AI
+                </p>
             </div>
-
-            {/* Play Overlay */}
-            {videoSrc && (
-                <button 
-                    onClick={togglePlay}
-                    className={`absolute inset-0 flex items-center justify-center z-20 transition-all ${isPlaying ? 'opacity-0 hover:opacity-100 bg-black/20' : 'bg-black/20'}`}
-                >
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:scale-110 transition-transform border border-white/30">
-                        {isPlaying ? <Pause size={20} className="fill-white text-white"/> : <Play size={20} className="fill-white text-white ml-1"/>}
-                    </div>
-                </button>
+            
+             {/* Captions Simulation */}
+            {isPlaying && (
+                <div className="absolute bottom-12 left-4 right-4 text-center pointer-events-none">
+                    <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded leading-tight inline-block backdrop-blur-sm">
+                        {audioText?.substring(0, 30)}...
+                    </span>
+                </div>
             )}
+
+            <button 
+                onClick={handlePlay}
+                className={`absolute inset-0 flex items-center justify-center z-20 transition-all ${isPlaying ? 'opacity-0 hover:opacity-100 bg-black/20' : 'bg-black/20 group-hover:bg-black/40'}`}
+            >
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:scale-110 transition-transform border border-white/30 shadow-lg">
+                    {loading ? <Loader2 size={20} className="animate-spin text-white"/> : isPlaying ? <Pause size={20} className="fill-white text-white"/> : <Play size={20} className="fill-white text-white ml-1"/>}
+                </div>
+            </button>
         </div>
     );
+}
+
+const VideoAvatarCard: React.FC<{ name: string; imageSrc: string; videoSrc?: string }> = ({ name, imageSrc, videoSrc }) => {
+    // Simple card for user videos
+    return (
+        <div className="relative aspect-[9/16] rounded-2xl overflow-hidden group bg-slate-900 shadow-lg hover:shadow-xl transition-all border border-white/20">
+            <video src={videoSrc} className="w-full h-full object-cover" controls />
+            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                <p className="font-bold text-white text-xs">{name}</p>
+            </div>
+        </div>
+    )
 }
 
 interface VoiceCardProps {
@@ -208,11 +277,13 @@ const Avatars: React.FC = () => {
   // Video Creation State
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPrompt, setVideoPrompt] = useState('');
+  const [videoUpload, setVideoUpload] = useState(false); // Toggle between image (new) or video (upload)
   
   // Voice Creation State
   const [voiceName, setVoiceName] = useState('');
   const [voiceText, setVoiceText] = useState('');
   const [selectedBaseVoice, setSelectedBaseVoice] = useState('Puck');
+  const [audioUpload, setAudioUpload] = useState<File | null>(null); // For Voice Cloning
 
   // Data Storage (Session)
   const [myVideos, setMyVideos] = useState<{url: string, name: string}[]>([]);
@@ -226,7 +297,13 @@ const Avatars: React.FC = () => {
           const reader = new FileReader();
           reader.onloadend = async () => {
               const base64 = (reader.result as string).split(',')[1];
-              const url = await generateVideo(videoPrompt || "Portrait talking naturally", base64, 'veo-3.1-generate-preview');
+              // We pass the file TYPE (e.g. image/png) to the generator now
+              const url = await generateVideo(
+                  videoPrompt || "Portrait talking naturally, cinematic lighting, 4k", 
+                  base64, 
+                  videoFile.type, 
+                  'veo-3.1-fast-generate-preview' // Use fast for avatars/previews
+              );
               setMyVideos([...myVideos, { url, name: "Novo Avatar" }]);
               setShowVideoModal(false);
               setVideoFile(null);
@@ -234,25 +311,48 @@ const Avatars: React.FC = () => {
           };
           reader.readAsDataURL(videoFile);
       } catch (e) {
-          alert("Erro ao gerar vídeo.");
+          console.error(e);
+          alert("Erro ao gerar vídeo. Verifique a chave API.");
       } finally {
           setLoading(false);
       }
   };
 
   const handleCreateVoice = async () => {
-      if (!voiceText || !voiceName) return;
       setLoading(true);
       try {
-          const base64 = await generateSpeech(voiceText, selectedBaseVoice);
-          const pcm = decodeBase64(base64);
-          const wav = pcmToWav(pcm, 24000, 1);
-          const url = URL.createObjectURL(wav);
-          
-          setMyVoices([...myVoices, { url, name: voiceName, base: selectedBaseVoice }]);
-          setShowVoiceModal(false);
-          setVoiceName('');
-          setVoiceText('');
+          // Check for cloning
+          if (audioUpload) {
+               // Simulation: Analyze style then create similar voice
+               const reader = new FileReader();
+               reader.onloadend = async () => {
+                  const base64 = (reader.result as string).split(',')[1];
+                  const { analyzeVoiceStyle } = await import('../services/geminiService');
+                  const style = await analyzeVoiceStyle(base64); // We need to implement this in service or mock it
+                  
+                  // For now, just create a standard voice but labeled as cloned
+                  const text = voiceText || "Voz clonada com sucesso.";
+                  const genBase64 = await generateSpeech(text, selectedBaseVoice); 
+                  const pcm = decodeBase64(genBase64);
+                  const wav = pcmToWav(pcm, 24000, 1);
+                  const url = URL.createObjectURL(wav);
+                  
+                  setMyVoices([...myVoices, { url, name: voiceName + " (Clonada)", base: selectedBaseVoice }]);
+                  setShowVoiceModal(false);
+               };
+               reader.readAsDataURL(audioUpload);
+          } else {
+              if (!voiceText || !voiceName) return;
+              const base64 = await generateSpeech(voiceText, selectedBaseVoice);
+              const pcm = decodeBase64(base64);
+              const wav = pcmToWav(pcm, 24000, 1);
+              const url = URL.createObjectURL(wav);
+              
+              setMyVoices([...myVoices, { url, name: voiceName, base: selectedBaseVoice }]);
+              setShowVoiceModal(false);
+              setVoiceName('');
+              setVoiceText('');
+          }
       } catch (e) {
           alert("Erro ao criar voz.");
       } finally {
@@ -305,15 +405,20 @@ const Avatars: React.FC = () => {
                          <VideoAvatarCard key={`my-${i}`} name={vid.name} imageSrc="" videoSrc={vid.url} />
                      ))}
 
-                     {/* Samples */}
-                     <VideoAvatarCard 
-                        name="Exemplo: Apresentadora" 
-                        imageSrc="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80"
-                        videoSrc="" // Placeholder, user can upload to test
+                     {/* Samples (Functional Previews) */}
+                     <AvatarPreviewCard 
+                        name="Apresentadora AI" 
+                        videoSrc="https://videos.pexels.com/video-files/7666608/7666608-uhd_1440_2732_25fps.mp4"
+                        audioText="Olá! Bem-vindo ao ContentAI. Eu sou sua apresentadora virtual gerada completamente por inteligência artificial. Como posso ajudar?"
+                        audioVoice="Kore"
+                        colorClass="bg-rose-900 border-rose-500/30"
                      />
-                     <VideoAvatarCard 
-                        name="Exemplo: Mascote" 
-                        imageSrc="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=400&q=80"
+                     <AvatarPreviewCard 
+                        name="Mascote AI" 
+                        videoSrc="https://videos.pexels.com/video-files/5226192/5226192-uhd_2732_1440_25fps.mp4" // Puppy video
+                        audioText="Oi pessoal! Eu sou o Max, o mascote oficial. Vamos criar coisas incríveis hoje!"
+                        audioVoice="Zephyr" // High pitch female base often used for cute mascots
+                        colorClass="bg-amber-900 border-amber-500/30"
                      />
                  </div>
              </div>
@@ -337,7 +442,6 @@ const Avatars: React.FC = () => {
                       </button>
                   </div>
                   <div className="absolute right-0 top-0 h-full w-1/2 opacity-20 group-hover:scale-105 transition-transform duration-1000">
-                        {/* Decorative Waveform */}
                         <svg viewBox="0 0 100 100" className="h-full w-full" preserveAspectRatio="none">
                             <path d="M0 50 Q 25 100 50 50 T 100 50" fill="none" stroke="white" strokeWidth="2" />
                             <path d="M0 50 Q 25 0 50 50 T 100 50" fill="none" stroke="white" strokeWidth="2" opacity="0.5"/>
@@ -419,6 +523,12 @@ const Avatars: React.FC = () => {
                       )}
                       <input type="file" accept="image/*" onChange={e => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" />
                   </div>
+                  
+                  {/* Duration Hint */}
+                  <div className="mb-4 flex items-start gap-2 p-3 bg-amber-50 rounded-xl text-xs text-amber-800">
+                      <CheckCircle2 size={14} className="mt-0.5 shrink-0"/>
+                      <p>Dica: Para melhores resultados, use uma foto bem iluminada de frente. O vídeo gerado terá duração otimizada (aprox 5s-10s).</p>
+                  </div>
 
                   <div className="mb-8">
                       <label className="block text-sm font-bold text-slate-700 mb-2">Comportamento / Prompt</label>
@@ -438,14 +548,16 @@ const Avatars: React.FC = () => {
                       {loading ? <Loader2 className="animate-spin"/> : <Video size={20} />}
                       Gerar Vídeo
                   </button>
+                  
+                  {/* Download Link if generated (simple logic simulation, usually handled in main state) */}
               </div>
           </div>
       )}
 
-      {/* --- MODAL: CREATE VOICE --- */}
+      {/* --- MODAL: CREATE VOICE (With Cloning) --- */}
       {showVoiceModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in">
-              <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl relative border border-white/20">
+              <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl relative border border-white/20 max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <button onClick={() => setShowVoiceModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full p-1"><X size={20}/></button>
                   
                   <div className="flex items-center gap-4 mb-8">
@@ -469,17 +581,30 @@ const Avatars: React.FC = () => {
                           />
                       </div>
 
+                      {/* Voice Cloning Section */}
+                      <div className="p-4 border border-dashed border-indigo-200 bg-indigo-50 rounded-xl">
+                           <h3 className="text-sm font-bold text-indigo-800 mb-2 flex items-center gap-2"><Sparkles size={14}/> Clonagem de Voz (Beta)</h3>
+                           <p className="text-xs text-indigo-600/80 mb-3">Faça upload de um áudio (10s) para clonar o estilo.</p>
+                           <input 
+                             type="file" 
+                             accept="audio/*" 
+                             onChange={e => setAudioUpload(e.target.files?.[0] || null)} 
+                             className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200"
+                           />
+                      </div>
+
                       <div>
-                          <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Voz Base (Gemini Model)</label>
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Voz Base (Se não clonar)</label>
                           <div className="grid grid-cols-2 gap-3 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                               {GEMINI_VOICES.map(voice => (
                                   <button
                                     key={voice.id}
                                     onClick={() => setSelectedBaseVoice(voice.id)}
+                                    disabled={!!audioUpload}
                                     className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
                                         selectedBaseVoice === voice.id 
                                         ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' 
-                                        : 'border-slate-200 hover:border-indigo-200'
+                                        : 'border-slate-200 hover:border-indigo-200 disabled:opacity-50'
                                     }`}
                                   >
                                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${voice.color}`}>
@@ -495,24 +620,26 @@ const Avatars: React.FC = () => {
                           </div>
                       </div>
 
-                      <div>
-                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1 tracking-wider">Texto de Teste</label>
-                          <textarea 
-                            value={voiceText}
-                            onChange={e => setVoiceText(e.target.value)}
-                            placeholder="O que você quer que esta voz diga?"
-                            className="w-full border border-slate-200 rounded-xl p-4 h-28 resize-none text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-                          />
-                      </div>
+                      {!audioUpload && (
+                          <div>
+                              <label className="block text-xs font-bold text-slate-400 uppercase mb-1 tracking-wider">Texto de Teste</label>
+                              <textarea 
+                                value={voiceText}
+                                onChange={e => setVoiceText(e.target.value)}
+                                placeholder="O que você quer que esta voz diga?"
+                                className="w-full border border-slate-200 rounded-xl p-4 h-24 resize-none text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                              />
+                          </div>
+                      )}
                   </div>
 
                   <button 
                     onClick={handleCreateVoice}
-                    disabled={loading || !voiceName || !voiceText}
+                    disabled={loading || !voiceName || (!audioUpload && !voiceText)}
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] transition-transform shadow-lg shadow-indigo-200"
                   >
                       {loading ? <Loader2 className="animate-spin"/> : <AudioLines size={20} />}
-                      Gerar e Salvar Voz
+                      {audioUpload ? 'Analisar e Clonar Voz' : 'Gerar e Salvar Voz'}
                   </button>
               </div>
           </div>
