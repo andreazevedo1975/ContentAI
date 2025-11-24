@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, Key, Zap } from 'lucide-react';
+import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, Key, Zap, BookOpen, LayoutGrid, Boxes } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 // Brand Logo Component
@@ -71,11 +71,14 @@ const Sidebar: React.FC = () => {
       {/* Scrollable Nav */}
       <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar">
         <NavItem to="/" icon={<Home />} label="Início" active={path === '/'} />
+        <NavItem to="/studio" icon={<LayoutGrid />} label="Estúdio" active={path === '/studio'} />
 
         <SectionLabel label="Creative Suite" />
         <NavItem to="/video" icon={<Video />} label="Vídeo & Motion" active={path === '/video'} />
         <NavItem to="/image" icon={<ImageIcon />} label="Imagem & Design" active={path === '/image'} />
+        <NavItem to="/tools" icon={<Boxes />} label="Modelos & Ferramentas" active={path === '/tools'} badge="AI Hub" />
         <NavItem to="/avatars" icon={<User />} label="Avatares & Voz" active={path === '/avatars'} />
+        <NavItem to="/audiobook" icon={<BookOpen />} label="Audiolivros" active={path === '/audiobook'} />
         <NavItem to="/tts" icon={<Mic />} label="Texto para Fala" active={path === '/tts'} />
 
         <SectionLabel label="Discover" />

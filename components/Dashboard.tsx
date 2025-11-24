@@ -154,19 +154,6 @@ const Dashboard: React.FC = () => {
         />
 
       </div>
-      
-      {/* Footer / Promo */}
-      <div className="mt-16 p-1 rounded-[32px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-2xl">
-          <div className="bg-white/90 backdrop-blur-xl rounded-[28px] p-10 md:p-14 flex flex-col md:flex-row items-center justify-between gap-8">
-               <div>
-                   <h2 className="text-3xl font-black text-slate-900 mb-3 font-display tracking-tight">Pronto para o próximo nível?</h2>
-                   <p className="text-slate-600 text-lg font-medium">Desbloqueie o potencial do Gemini 3 Pro com nossas ferramentas de pesquisa de mercado.</p>
-               </div>
-               <Link to="/resources" className="bg-slate-900 text-white px-10 py-5 rounded-2xl font-bold shadow-xl hover:scale-105 hover:bg-black transition-all flex items-center gap-3 text-lg">
-                   Explorar Ferramentas Pro <Sparkles size={20} className="text-amber-400 fill-amber-400 animate-pulse"/>
-               </Link>
-          </div>
-      </div>
     </div>
   );
 };

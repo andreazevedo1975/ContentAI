@@ -7,6 +7,7 @@ import ImageStudio from './components/ImageStudio';
 import TextToSpeech from './components/TextToSpeech';
 import Inspiration from './components/Inspiration';
 import Avatars from './components/Avatars';
+import AudiobookCreator from './components/AudiobookCreator';
 import Analytics from './components/Analytics';
 import Publisher from './components/Publisher';
 import ResourcesHub from './components/ResourcesHub';
@@ -14,6 +15,8 @@ import LiveAssistant from './components/LiveAssistant';
 import MarketResearch from './components/MarketResearch';
 import LocationScout from './components/LocationScout';
 import VideoAnalyzer from './components/VideoAnalyzer';
+import Studio from './components/Studio';
+import AdditionalTools from './components/AdditionalTools';
 
 const App: React.FC = () => {
   return (
@@ -28,10 +31,13 @@ const App: React.FC = () => {
         <main className="flex-1 md:ml-80 rounded-[32px] bg-white/40 backdrop-blur-xl border border-white/60 shadow-2xl overflow-y-auto h-[calc(100vh-3rem)] relative custom-scrollbar">
             <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/studio" element={<Studio />} />
                 <Route path="/video" element={<VideoGenerator />} />
                 <Route path="/image" element={<ImageStudio />} />
+                <Route path="/tools" element={<AdditionalTools />} />
                 <Route path="/tts" element={<TextToSpeech />} />
                 <Route path="/avatars" element={<Avatars />} />
+                <Route path="/audiobook" element={<AudiobookCreator />} />
                 <Route path="/inspiration" element={<Inspiration />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/editor" element={<Publisher />} />
