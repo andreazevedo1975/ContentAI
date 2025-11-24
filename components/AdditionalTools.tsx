@@ -1,44 +1,315 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Filter, ArrowRight, Split, Video, Image as ImageIcon, Mic, Sparkles, Layers } from 'lucide-react';
 
-// Mock Data simulating the screenshot items
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Video, Image as ImageIcon, Mic, Split, ArrowRight, X, Upload, Check, Monitor, Smartphone, Square, RectangleHorizontal } from 'lucide-react';
+
+// --- Compare Slider Component ---
+const CompareSlider: React.FC<{ before: string; after: string; alt: string; isVintage?: boolean }> = ({ before, after, alt, isVintage }) => {
+  const [sliderPosition, setSliderPosition] = useState(50);
+
+  const handleMove = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSliderPosition(Number(event.target.value));
+  };
+
+  return (
+    <div className="relative w-full h-full overflow-hidden group">
+      {/* AFTER Image (Background) */}
+      <img 
+        src={after} 
+        alt={`${alt} After`} 
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      
+      {/* BEFORE Image Container (Foreground - Clipped) */}
+      <div 
+        className="absolute inset-0 w-full h-full overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+      >
+          <img 
+            src={before} 
+            alt={`${alt} Before`} 
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          
+          {/* Vintage Scratches Overlay (CSS Procedural) */}
+          {isVintage && (
+            <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen" 
+                 style={{
+                    backgroundImage: `
+                        repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 11px),
+                        radial-gradient(circle, transparent 50%, rgba(100,50,0,0.2) 100%)
+                    `,
+                    filter: 'contrast(1.5) sepia(0.3)'
+                 }}
+            >
+                <div className="absolute top-1/4 left-0 w-full h-[1px] bg-white/40 rotate-12 blur-[1px]"></div>
+                <div className="absolute top-3/4 left-0 w-full h-[1px] bg-white/30 -rotate-6 blur-[1px]"></div>
+            </div>
+          )}
+      </div>
+
+      {/* Slider Line */}
+      <div 
+        className="absolute inset-y-0 w-1 bg-white cursor-ew-resize z-20 shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+        style={{ left: `${sliderPosition}%` }}
+      >
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-1.5 rounded-full shadow-lg flex items-center justify-center">
+          <Split size={14} className="text-indigo-600" />
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="absolute top-3 left-3 bg-black/60 text-white text-[9px] font-bold px-2 py-1 rounded backdrop-blur-sm z-10 pointer-events-none border border-white/10">
+        Antes
+      </div>
+      <div className="absolute top-3 right-3 bg-indigo-600/80 text-white text-[9px] font-bold px-2 py-1 rounded backdrop-blur-sm z-10 pointer-events-none border border-white/10">
+        Depois (IA)
+      </div>
+
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={sliderPosition}
+        onChange={handleMove}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-30"
+      />
+    </div>
+  );
+};
+
+// --- Workflow Modal Component ---
+const ToolWorkflowModal: React.FC<{ 
+    tool: typeof TOOLS[0]; 
+    onClose: () => void; 
+    onExecute: (data: { prompt: string; aspectRatio: string; imageBase64?: string }) => void 
+}> = ({ tool, onClose, onExecute }) => {
+    const [prompt, setPrompt] = useState(tool.prompt);
+    const [aspectRatio, setAspectRatio] = useState('16:9');
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [preview, setPreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (f) {
+            setSelectedFile(f);
+            setPreview(URL.createObjectURL(f));
+        }
+    };
+
+    const handleExecuteClick = () => {
+        if (selectedFile) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = (reader.result as string); // Keep full data url for internal state passing
+                onExecute({ prompt, aspectRatio, imageBase64: base64 });
+            };
+            reader.readAsDataURL(selectedFile);
+        } else {
+            onExecute({ prompt, aspectRatio });
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white w-full max-w-5xl h-[90vh] md:h-auto md:max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                    <h2 className="text-xl font-bold text-slate-900">{tool.title}</h2>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                    {/* Left Column: Inputs */}
+                    <div className="w-full md:w-1/2 p-6 md:p-8 overflow-y-auto bg-white flex flex-col gap-6">
+                        
+                        {/* Description Input */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Descrição (Prompt)</label>
+                            <textarea 
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl resize-none text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                placeholder="Descreva o que você deseja criar..."
+                            />
+                        </div>
+
+                        {/* Reference Image Input */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Imagem de Referência <span className="text-slate-300 normal-case">(opcional)</span></label>
+                            <div 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="border-2 border-dashed border-slate-200 rounded-xl h-40 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-300 transition-colors relative overflow-hidden group"
+                            >
+                                {preview ? (
+                                    <>
+                                        <img src={preview} className="w-full h-full object-contain p-2" alt="Upload preview" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="text-white text-xs font-bold flex items-center gap-2"><Upload size={14}/> Trocar Imagem</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 mb-3 shadow-sm">
+                                            <Upload size={20} />
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-700 bg-white px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">Carregar imagem</span>
+                                        <span className="text-[10px] text-slate-400 mt-2">Arraste ou clique para enviar</span>
+                                    </>
+                                )}
+                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="image/*"/>
+                            </div>
+                        </div>
+
+                        {/* Aspect Ratio Pills */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Proporção (Aspect Ratio)</label>
+                            <div className="flex flex-wrap gap-3">
+                                {[
+                                    { label: '16:9', icon: <Monitor size={14}/> },
+                                    { label: '1:1', icon: <Square size={14}/> },
+                                    { label: '3:2', icon: <RectangleHorizontal size={14}/> },
+                                    { label: '9:16', icon: <Smartphone size={14}/> }
+                                ].map((ratio) => (
+                                    <button
+                                        key={ratio.label}
+                                        onClick={() => setAspectRatio(ratio.label)}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all ${
+                                            aspectRatio === ratio.label 
+                                            ? 'border-indigo-600 text-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' 
+                                            : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        {ratio.icon} {ratio.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Right Column: Preview Image */}
+                    <div className="w-full md:w-1/2 bg-slate-50 p-6 md:p-8 flex items-center justify-center border-t md:border-t-0 md:border-l border-slate-100">
+                        <div className="relative w-full h-full max-h-[500px] rounded-xl overflow-hidden shadow-lg border border-slate-200/50">
+                             <img src={tool.image} alt="Preview" className="w-full h-full object-cover" />
+                             <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+                                 <p className="text-white font-bold text-lg">{tool.title}</p>
+                                 <p className="text-white/70 text-xs mt-1 line-clamp-2">{tool.prompt}</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-5 border-t border-slate-100 bg-white flex justify-between items-center shrink-0">
+                    <button 
+                        onClick={onClose}
+                        className="text-slate-500 font-bold text-sm px-6 py-3 hover:bg-slate-50 rounded-xl transition-colors"
+                    >
+                        Voltar
+                    </button>
+                    <button 
+                        onClick={handleExecuteClick}
+                        className="bg-slate-900 text-white font-bold text-sm px-8 py-3 rounded-xl hover:bg-black transition-transform hover:scale-105 shadow-lg"
+                    >
+                        Executar workflow
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- DATA ---
 const TOOLS = [
-  { id: 1, title: "Gerador de Animais", type: "image", image: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=400&q=80", prompt: "Cute 3D rendered animal, pixar style", badge: "Novo" },
-  { id: 2, title: "Alterar a expressão facial", type: "edit", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80", prompt: "Change facial expression to smile", compare: true },
-  { id: 3, title: "Alterar plano de fundo", type: "edit", image: "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=400&q=80", prompt: "Change background to mars landscape", compare: true },
-  { id: 4, title: "Substituir elemento", type: "edit", image: "https://images.unsplash.com/photo-1595461135849-bf08dc93a958?auto=format&fit=crop&w=400&q=80", prompt: "Replace object with...", compare: true },
-  { id: 5, title: "Vídeo de carro UGC", type: "video", image: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=400&q=80", prompt: "UGC style video review of a car interior, handheld camera" },
-  { id: 6, title: "Aprimorador de fotos antigas", type: "image", image: "https://images.unsplash.com/photo-1531844251246-9a1bfaaeeb9a?auto=format&fit=crop&w=400&q=80", prompt: "Restored vintage photograph, high quality, remove scratches", compare: true },
-  { id: 7, title: "Selfie de influenciador UGC", type: "image", image: "https://images.unsplash.com/photo-1516726817505-f5ed8259b496?auto=format&fit=crop&w=400&q=80", prompt: "Influencer selfie holding a product, ring light lighting" },
-  { id: 8, title: "Desfocar imagem", type: "edit", image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80", prompt: "Apply gaussian blur to background", compare: true },
-  { id: 9, title: "Converter para P&B", type: "edit", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80", prompt: "Convert to artistic black and white photography", compare: true },
-  { id: 10, title: "Transformar em algas", type: "edit", image: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=400&q=80", prompt: "Style transfer, algae texture overlay", compare: true },
-  { id: 11, title: "Foto em desenho animado", type: "image", image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80", prompt: "Turn person into a 3D cartoon character", compare: true },
-  { id: 12, title: "Foto em esboço", type: "image", image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80", prompt: "Pencil sketch style portrait", compare: true },
-  { id: 13, title: "Remover texto da imagem", type: "edit", image: "https://images.unsplash.com/photo-1555445054-dab9940f89b6?auto=format&fit=crop&w=400&q=80", prompt: "Remove text overlay, clean background", compare: true },
-  { id: 14, title: "Colorir foto", type: "edit", image: "https://images.unsplash.com/photo-1517423440428-a5a00ad493e8?auto=format&fit=crop&w=400&q=80", prompt: "Colorize black and white photo", compare: true },
-  { id: 15, title: "Efeito caleidoscópio", type: "edit", image: "https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&w=400&q=80", prompt: "Kaleidoscope abstract effect", compare: true },
-  { id: 16, title: "Sessão de fotos de produtos", type: "image", image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80", prompt: "Professional product photography session", compare: true },
-  { id: 17, title: "Substituir fundo por tela verde", type: "edit", image: "https://images.unsplash.com/photo-1535376472810-5d229c65da09?auto=format&fit=crop&w=400&q=80", prompt: "Replace background with chroma key green", compare: true },
-  { id: 18, title: "Age Me (Envelhecer)", type: "edit", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80", prompt: "Make person look older, aging effect", compare: true },
-  { id: 19, title: "Repórter de notícias", type: "video", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&q=80", prompt: "News reporter avatar speaking", badge: "Video" },
-  { id: 20, title: "Apenas esboços", type: "image", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=400&q=80", prompt: "Architectural sketch", compare: true },
-  { id: 21, title: "Henry: Vídeo do Produto", type: "video", image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80", prompt: "Professional presenter Henry talking about product", badge: "Avatar" },
-  { id: 22, title: "Do esboço à realidade", type: "image", image: "https://images.unsplash.com/photo-1517423568366-028c497177f1?auto=format&fit=crop&w=400&q=80", prompt: "Turn sketch into photorealistic render", compare: true },
-  { id: 23, title: "Cartoon para realista", type: "image", image: "https://images.unsplash.com/photo-1618331835717-801e976710b2?auto=format&fit=crop&w=400&q=80", prompt: "Turn cartoon into photorealistic human", compare: true },
-  { id: 24, title: "Outdoor Mockup", type: "edit", image: "https://images.unsplash.com/photo-1552083375-1447ce886485?auto=format&fit=crop&w=400&q=80", prompt: "Place image on outdoor billboard", compare: true },
-  { id: 25, title: "Sandra: Vídeo do Produto", type: "video", image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80", prompt: "Professional presenter Sandra talking about product", badge: "Avatar" },
-  { id: 26, title: "Dublagem personalizada", type: "audio", image: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=400&q=80", prompt: "Custom voice dubbing", badge: "Audio" },
-  { id: 27, title: "Gerador de trilha sonora", type: "audio", image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=400&q=80", prompt: "Generate background music", badge: "Audio" },
-  { id: 28, title: "Aprimore uma imagem", type: "edit", image: "https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=400&q=80", prompt: "Upscale and enhance image details", compare: true },
-  { id: 29, title: "Podcaster UGC", type: "video", image: "https://images.unsplash.com/photo-1583121833477-06cb66f15238?auto=format&fit=crop&w=400&q=80", prompt: "UGC Podcaster talking into microphone" },
-  { id: 30, title: "Produto em mãos", type: "image", image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=400&q=80", prompt: "Hand holding product pov", compare: true },
-  { id: 31, title: "Streamer UGC", type: "video", image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=400&q=80", prompt: "Game streamer reacting to screen" },
-  { id: 32, title: "Expansor de imagens", type: "edit", image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80", prompt: "Outpaint image, expand borders", compare: true },
-  { id: 33, title: "Foto ao vivo", type: "video", image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=400&q=80", prompt: "Animate static photo", compare: true },
-  { id: 34, title: "Remover objeto", type: "edit", image: "https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?auto=format&fit=crop&w=400&q=80", prompt: "Remove selected object", compare: true },
-  { id: 35, title: "Entrevista de rua UGC", type: "video", image: "https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=400&q=80", prompt: "Street interview UGC style" }
+  { 
+    id: 1, 
+    title: "Gerador de Animais 3D", 
+    type: "image", 
+    image: "https://images.unsplash.com/photo-1629812456605-4a044aa38fbc?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Cute 3D rendered rabbit, pixar style, vibrant colors, magical forest background", 
+    badge: "Novo" 
+  },
+  { 
+    id: 2, 
+    title: "Alterar Expressão Facial", 
+    type: "edit", 
+    image: "https://img.freepik.com/free-photo/3d-cartoon-boy-winking_23-2151683671.jpg?t=st=1732650000~exp=1732653600~hmac=fake", // Placeholder for stable hosted pixar boy
+    prompt: "Change facial expression to a wide happy smile", 
+    compare: true,
+    beforeImage: "https://img.freepik.com/free-photo/3d-cartoon-boy-with-glasses_23-2151683665.jpg?t=st=1732650000~exp=1732653600~hmac=fake", // Serious
+    afterImage: "https://img.freepik.com/free-photo/3d-cartoon-boy-winking_23-2151683671.jpg?t=st=1732650000~exp=1732653600~hmac=fake"  // Smiling
+  },
+  { 
+    id: 3, 
+    title: "Alterar Plano de Fundo", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Change background to a professional audio studio context", 
+    compare: true,
+    beforeImage: "https://images.unsplash.com/photo-1505740420926-4d673942470d?auto=format&fit=crop&w=600&q=80", // White bg
+    afterImage: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80" // Context bg
+  },
+  { 
+    id: 13, 
+    title: "Remover Texto da Imagem", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Remove text overlay, clean background", 
+    compare: true,
+    beforeImage: "https://images.unsplash.com/photo-1555445054-dab9940f89b6?auto=format&fit=crop&w=600&q=80", // Text
+    afterImage: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80" // Clean
+  },
+  { 
+    id: 6, 
+    title: "Restaurar Fotos Antigas", 
+    type: "image", 
+    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Restored vintage photograph, high quality, remove scratches, colorize", 
+    compare: true,
+    isVintage: true,
+    beforeImage: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80&sat=-100", 
+    afterImage: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=100"
+  },
+  { 
+    id: 9, 
+    title: "Converter para P&B", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100&sepia=80", 
+    prompt: "Convert to artistic sepia photography", 
+    compare: true,
+    beforeImage: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80", 
+    afterImage: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100&sepia=80"
+  },
+  { 
+    id: 14, 
+    title: "Colorir Foto", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Colorize black and white photo", 
+    compare: true,
+    beforeImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80&sat=-100", 
+    afterImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80" 
+  },
+  { 
+    id: 32, 
+    title: "Expansor de Imagens", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Outpaint image, expand borders landscape", 
+    compare: true,
+    beforeImage: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&h=300&q=80", 
+    afterImage: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80" 
+  },
+  { id: 5, title: "Vídeo de Carro UGC", type: "video", image: "https://images.unsplash.com/photo-1619731196978-7277f7992226?auto=format&fit=crop&w=600&q=80", prompt: "UGC style video review of a car interior, woman speaking to camera in car" },
+  { id: 7, title: "Selfie Influencer", type: "image", image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80", prompt: "Influencer selfie holding a product, cozy bright room, smiling, authentic look" },
+  { id: 16, title: "Sessão de Produtos", type: "image", image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80", prompt: "Professional product photography" },
+  { id: 19, title: "Repórter de Notícias", type: "video", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&q=80", prompt: "News reporter avatar speaking", badge: "Avatar" },
+  { id: 25, title: "Apresentador de Vídeo", type: "video", image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=600&q=80", prompt: "Professional presenter talking", badge: "Avatar" },
+  { id: 27, title: "Gerador de Trilha Sonora", type: "audio", image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=600&q=80", prompt: "Generate background music", badge: "Audio" }
 ];
 
 const ModelCard: React.FC<{ item: typeof TOOLS[0]; onClick: () => void }> = ({ item, onClick }) => (
@@ -46,35 +317,36 @@ const ModelCard: React.FC<{ item: typeof TOOLS[0]; onClick: () => void }> = ({ i
     onClick={onClick}
     className="break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 bg-slate-100 mb-6"
   >
-    <div className="relative aspect-[3/4] overflow-hidden">
-        <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-        
-        {/* Compare visual effect (Split line) */}
-        {item.compare && (
-            <div className="absolute inset-0 pointer-events-none flex justify-center items-center">
-                <div className="h-full w-0.5 bg-white/50 shadow-[0_0_10px_rgba(0,0,0,0.3)]"></div>
-                <div className="absolute bg-white p-1.5 rounded-full shadow-lg">
-                    <Split size={14} className="text-slate-600" />
-                </div>
-                <div className="absolute top-3 left-3 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">Antes</div>
-                <div className="absolute top-3 right-3 bg-black/50 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">Depois</div>
-            </div>
+    <div className="relative aspect-[3/4] overflow-hidden bg-slate-200">
+        {item.compare && item.beforeImage && item.afterImage ? (
+            <CompareSlider 
+              before={item.beforeImage} 
+              after={item.afterImage} 
+              alt={item.title}
+              isVintage={(item as any).isVintage}
+            />
+        ) : (
+            <img 
+              src={item.image} 
+              alt={item.title} 
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+            />
         )}
 
         {/* Badge */}
         {item.badge && (
-            <div className="absolute top-3 left-3">
+            <div className="absolute top-3 left-3 z-20">
                 <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm uppercase tracking-wide">
                     {item.badge}
                 </span>
             </div>
         )}
 
-        <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+        <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none z-20">
             <h3 className="text-white font-bold text-sm leading-tight mb-1">{item.title}</h3>
             <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider flex items-center gap-1">
                {item.type === 'video' ? <Video size={10}/> : item.type === 'audio' ? <Mic size={10}/> : <ImageIcon size={10}/>}
-               {item.type === 'edit' ? 'Edição' : item.type}
+               {item.type === 'edit' ? 'Edição de IA' : item.type}
             </p>
         </div>
     </div>
@@ -85,22 +357,31 @@ const AdditionalTools: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Explorar');
+  const [selectedTool, setSelectedTool] = useState<typeof TOOLS[0] | null>(null);
 
   const handleToolClick = (tool: typeof TOOLS[0]) => {
-      // Map tool types to existing routes/components
-      switch(tool.type) {
+      setSelectedTool(tool);
+  };
+
+  const handleExecuteWorkflow = (data: { prompt: string; aspectRatio: string; imageBase64?: string }) => {
+      if (!selectedTool) return;
+
+      // Close modal
+      setSelectedTool(null);
+
+      // Navigate logic based on tool type
+      switch(selectedTool.type) {
           case 'video':
-              navigate('/video', { state: { mode: 'marketing', prompt: tool.prompt } });
+              navigate('/video', { state: { mode: 'marketing', prompt: data.prompt, aspectRatio: data.aspectRatio, image: data.imageBase64 } });
               break;
           case 'image':
-              navigate('/image', { state: { mode: 'product', prompt: tool.prompt } });
+              navigate('/image', { state: { mode: 'product', prompt: data.prompt, image: data.imageBase64 } });
               break;
           case 'edit':
-              // For edit tools, we go to image studio in 'design' mode which supports upload
-              navigate('/image', { state: { mode: 'design', prompt: tool.prompt } });
+              navigate('/image', { state: { mode: 'design', prompt: data.prompt, image: data.imageBase64 } });
               break;
           case 'audio':
-              navigate('/tts');
+              navigate('/tts'); // TTS typically doesn't take visual prompt, but could be adapted
               break;
           default:
               navigate('/image');
@@ -133,7 +414,7 @@ const AdditionalTools: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="text" 
-                    placeholder="Modelos de pesquisa..." 
+                    placeholder="Buscar modelos..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
@@ -154,7 +435,11 @@ const AdditionalTools: React.FC = () => {
       {/* Grid */}
       <div className="columns-2 md:columns-3 lg:columns-4 gap-6 space-y-6">
           {filteredTools.map(tool => (
-              <ModelCard key={tool.id} item={tool} onClick={() => handleToolClick(tool)} />
+              <ModelCard 
+                key={tool.id} 
+                item={tool} 
+                onClick={() => handleToolClick(tool)} 
+              />
           ))}
       </div>
 
@@ -163,8 +448,17 @@ const AdditionalTools: React.FC = () => {
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
                   <Search size={32}/>
               </div>
-              <p className="text-slate-500 font-medium">Nenhum modelo encontrado para "{searchTerm}"</p>
+              <p className="text-slate-500 font-medium">Nenhum modelo encontrado.</p>
           </div>
+      )}
+
+      {/* Workflow Modal */}
+      {selectedTool && (
+          <ToolWorkflowModal 
+            tool={selectedTool} 
+            onClose={() => setSelectedTool(null)} 
+            onExecute={handleExecuteWorkflow}
+          />
       )}
 
     </div>

@@ -207,13 +207,22 @@ const TextToSpeech: React.FC = () => {
                     <div className="animate-in fade-in">
                         <audio controls src={audioUrl} className="w-full h-10 accent-indigo-600 mb-6" />
                         
-                        <a 
-                            href={audioUrl} 
-                            download={`narracao-${selectedVoice}.wav`}
-                            className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-indigo-200"
-                        >
-                            <Download size={16} /> Download .WAV
-                        </a>
+                        <div className="flex gap-2">
+                            <a 
+                                href={audioUrl} 
+                                download={`narracao-${selectedVoice}.wav`}
+                                className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-indigo-200"
+                            >
+                                <Download size={16} /> Download .WAV
+                            </a>
+                            <button 
+                                onClick={() => setAudioUrl(null)}
+                                className="px-4 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
+                                title="Limpar áudio gerado"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="h-32 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
