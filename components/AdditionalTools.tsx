@@ -224,34 +224,36 @@ const ToolWorkflowModal: React.FC<{
 };
 
 // --- DATA ---
+// Using strictly Unsplash for reliability. No generic IDs or broken Freepik links.
 const TOOLS = [
   { 
     id: 1, 
     title: "Gerador de Animais 3D", 
     type: "image", 
-    image: "https://images.unsplash.com/photo-1629812456605-4a044aa38fbc?auto=format&fit=crop&w=600&q=80", 
-    prompt: "Cute 3D rendered rabbit, pixar style, vibrant colors, magical forest background", 
+    image: "https://images.unsplash.com/photo-1616788494707-ec28f08d05a1?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Cute 3D rendered animal toy, pixar style, vibrant colors", 
     badge: "Novo" 
   },
   { 
     id: 2, 
     title: "Alterar Expressão Facial", 
     type: "edit", 
-    image: "https://img.freepik.com/free-photo/3d-cartoon-boy-winking_23-2151683671.jpg?t=st=1732650000~exp=1732653600~hmac=fake", // Placeholder for stable hosted pixar boy
+    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80", 
     prompt: "Change facial expression to a wide happy smile", 
     compare: true,
-    beforeImage: "https://img.freepik.com/free-photo/3d-cartoon-boy-with-glasses_23-2151683665.jpg?t=st=1732650000~exp=1732653600~hmac=fake", // Serious
-    afterImage: "https://img.freepik.com/free-photo/3d-cartoon-boy-winking_23-2151683671.jpg?t=st=1732650000~exp=1732653600~hmac=fake"  // Smiling
+    // Using two different men who look somewhat compatible for the demo concept of "Expression Change"
+    beforeImage: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80", // Serious
+    afterImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80"  // Smiling
   },
   { 
     id: 3, 
     title: "Alterar Plano de Fundo", 
     type: "edit", 
-    image: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80", 
+    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80", 
     prompt: "Change background to a professional audio studio context", 
     compare: true,
-    beforeImage: "https://images.unsplash.com/photo-1505740420926-4d673942470d?auto=format&fit=crop&w=600&q=80", // White bg
-    afterImage: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=600&q=80" // Context bg
+    beforeImage: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80", // Simple bg
+    afterImage: "https://images.unsplash.com/photo-1617347454431-f49d7ff5c3b1?auto=format&fit=crop&w=600&q=80" // Context bg (using similar watch concept/feel)
   },
   { 
     id: 13, 
@@ -260,29 +262,29 @@ const TOOLS = [
     image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80", 
     prompt: "Remove text overlay, clean background", 
     compare: true,
-    beforeImage: "https://images.unsplash.com/photo-1555445054-dab9940f89b6?auto=format&fit=crop&w=600&q=80", // Text
-    afterImage: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80" // Clean
+    beforeImage: "https://images.unsplash.com/photo-1555445054-dab9940f89b6?auto=format&fit=crop&w=600&q=80", // Image with sign/text
+    afterImage: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80" // Clean look
   },
   { 
     id: 6, 
     title: "Restaurar Fotos Antigas", 
     type: "image", 
-    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80", 
+    image: "https://images.unsplash.com/photo-1548366086-7f1b76106622?auto=format&fit=crop&w=600&q=80", 
     prompt: "Restored vintage photograph, high quality, remove scratches, colorize", 
     compare: true,
     isVintage: true,
-    beforeImage: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80&sat=-100", 
-    afterImage: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=100"
+    beforeImage: "https://images.unsplash.com/photo-1548366086-7f1b76106622?auto=format&fit=crop&w=600&q=80&sat=-100&sepia=50&blur=1", 
+    afterImage: "https://images.unsplash.com/photo-1548366086-7f1b76106622?auto=format&fit=crop&w=600&q=80&sat=0"
   },
   { 
     id: 9, 
     title: "Converter para P&B", 
     type: "edit", 
-    image: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100&sepia=80", 
-    prompt: "Convert to artistic sepia photography", 
+    image: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100", 
+    prompt: "Convert to artistic black and white", 
     compare: true,
     beforeImage: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80", 
-    afterImage: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100&sepia=80"
+    afterImage: "https://images.unsplash.com/photo-1503218751919-1ea90572e609?auto=format&fit=crop&w=600&q=80&sat=-100"
   },
   { 
     id: 14, 
@@ -304,7 +306,7 @@ const TOOLS = [
     beforeImage: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&h=300&q=80", 
     afterImage: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80" 
   },
-  { id: 5, title: "Vídeo de Carro UGC", type: "video", image: "https://images.unsplash.com/photo-1619731196978-7277f7992226?auto=format&fit=crop&w=600&q=80", prompt: "UGC style video review of a car interior, woman speaking to camera in car" },
+  { id: 5, title: "Vídeo de Carro UGC", type: "video", image: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=600&q=80", prompt: "UGC style video review of a car interior, woman speaking to camera in car" },
   { id: 7, title: "Selfie Influencer", type: "image", image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80", prompt: "Influencer selfie holding a product, cozy bright room, smiling, authentic look" },
   { id: 16, title: "Sessão de Produtos", type: "image", image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80", prompt: "Professional product photography" },
   { id: 19, title: "Repórter de Notícias", type: "video", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&q=80", prompt: "News reporter avatar speaking", badge: "Avatar" },

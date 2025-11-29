@@ -35,7 +35,7 @@ const cleanBase64 = (b64: string): string => {
 };
 
 /**
- * Enhances a simple user prompt into a detailed prompt for image/video generation.
+ * Enhances a simple user prompt into a detailed, artistic, and descriptive prompt suitable for high-quality generation.
  */
 export const enhancePrompt = async (simplePrompt: string): Promise<string> => {
   const ai = getAI();
@@ -51,6 +51,33 @@ export const enhancePrompt = async (simplePrompt: string): Promise<string> => {
     return response.text || simplePrompt;
   } catch (error) {
     console.error("Error enhancing prompt:", error);
+    return simplePrompt;
+  }
+};
+
+/**
+ * Enhances a simple user prompt into a detailed prompt specifically for Video Generation (Veo).
+ * Focuses on cinematic camera moves, lighting, and consistency.
+ */
+export const enhanceVideoPrompt = async (simplePrompt: string): Promise<string> => {
+  const ai = getAI();
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `As a professional cinematographer, upgrade this video description into a premium Veo prompt.
+      
+      Original: "${simplePrompt}"
+      
+      Requirements:
+      1. Add camera movement (e.g., "Slow pan right", "Drone flyover", "Dolly zoom", "Handheld shake").
+      2. Add lighting/atmosphere (e.g., "Cinematic lighting", "Volumetric fog", "Cyberpunk neon", "Golden hour").
+      3. Add film stock/lens details (e.g., "35mm", "Anamorphic lens", "Depth of field").
+      4. Keep it concise (under 60 words).
+      5. Output ONLY the enhanced prompt.`,
+    });
+    return response.text || simplePrompt;
+  } catch (error) {
+    console.error("Error enhancing video prompt:", error);
     return simplePrompt;
   }
 };

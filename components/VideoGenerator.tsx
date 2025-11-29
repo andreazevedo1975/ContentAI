@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { generateVideo, detectVoicePersona } from '../services/geminiService';
+import { generateVideo, detectVoicePersona, enhanceVideoPrompt } from '../services/geminiService';
 import { 
   Loader2, 
   Plus, 
@@ -37,7 +38,7 @@ import {
   UploadCloud
 } from 'lucide-react';
 
-// --- Constants ---
+// ... Constants ...
 
 const PREDEFINED_VOICES = [
   { id: 'Auto', label: 'Automático (Baseado em Gênero/Idade)' },
@@ -57,7 +58,7 @@ const VOICE_EMOTIONS_PRESETS = [
     { label: 'Profissional (Pro)', prompt: 'professional, clear, authoritative, news anchor style' }
 ];
 
-// --- Components for this page ---
+// ... Components for this page ...
 
 const QuickActionPill: React.FC<{ icon?: React.ReactNode; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
   <button 
@@ -102,6 +103,7 @@ const VideoGenerator: React.FC = () => {
   const musicInputRef = useRef<HTMLInputElement>(null); // Ref for music upload
   const videoPlayerRef = useRef<HTMLVideoElement>(null); // Ref for sync
   const audioPlayerRef = useRef<HTMLAudioElement>(null); // Ref for sync
+  const lastVideoTimeRef = useRef(0); // Track video time for loop detection
   
   // State for Prompts
   const [activeTab, setActiveTab] = useState<'main' | 'background' | 'avatar'>('main');
@@ -114,6 +116,8 @@ const VideoGenerator: React.FC = () => {
   
   // Music Upload State
   const [bgMusicFile, setBgMusicFile] = useState<File | null>(null);
+  const [musicUrl, setMusicUrl] = useState<string | null>(null);
+  const [bgMusicVolume, setBgMusicVolume] = useState(0.2);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
@@ -129,6 +133,7 @@ const VideoGenerator: React.FC = () => {
   
   // Voice Dictation State
   const [isListening, setIsListening] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
   // Voice Settings State (Updated)
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
@@ -198,6 +203,24 @@ const VideoGenerator: React.FC = () => {
     }
   }, [location.state]);
 
+  // Object URL cleanup for music
+  useEffect(() => {
+    if (bgMusicFile) {
+      const url = URL.createObjectURL(bgMusicFile);
+      setMusicUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setMusicUrl(null);
+    }
+  }, [bgMusicFile]);
+
+  // Sync Volume effect
+  useEffect(() => {
+    if (audioPlayerRef.current) {
+        audioPlayerRef.current.volume = bgMusicVolume;
+    }
+  }, [bgMusicVolume, musicUrl]);
+
   // UI Helper to switch gender and reset specific dropdown to Auto (to ensure manual choice wins)
   const setGenderAndResetSpecific = (g: 'MALE' | 'FEMALE' | 'MASCOT' | 'NONE') => {
       setVoiceGender(g);
@@ -238,6 +261,25 @@ const VideoGenerator: React.FC = () => {
     recognition.onerror = () => setIsListening(false);
     recognition.onend = () => setIsListening(false);
     recognition.start();
+  };
+
+  const handleEnhancePrompt = async () => {
+    const current = (activeTab === 'main' || activeTab === 'avatar') ? mainPrompt : bgPrompt;
+    if (!current) return;
+    
+    setIsEnhancing(true);
+    try {
+        const enhanced = await enhanceVideoPrompt(current);
+        if (activeTab === 'main' || activeTab === 'avatar') {
+            setMainPrompt(enhanced);
+        } else {
+            setBgPrompt(enhanced);
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsEnhancing(false);
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -297,6 +339,11 @@ const VideoGenerator: React.FC = () => {
     setPreviewUrl(null);
     setVoiceAnalysis(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemoveMusic = () => {
+    setBgMusicFile(null);
+    if (musicInputRef.current) musicInputRef.current.value = '';
   };
 
   // ROBUST VOICE MAPPING FUNCTION
@@ -476,7 +523,7 @@ const VideoGenerator: React.FC = () => {
 
       // Pass resolution to service
       const videoUri = await generateVideo(finalPrompt, imageBase64, mimeType, modelId, resolution);
-      setGeneratedVideo(videoUri);
+      setGeneratedResultVideo(videoUri);
 
     } catch (error) {
       console.error(error);
@@ -484,6 +531,14 @@ const VideoGenerator: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Dedicated Video State for the Result View
+  // Using 'generatedVideo' from the state, but we need to ensure the setter is consistent
+  const setGeneratedResultVideo = (uri: string) => {
+      setGeneratedVideo(uri);
+      // Reset audio sync tracking
+      lastVideoTimeRef.current = 0;
   };
 
   const handleCopyLink = () => {
@@ -494,17 +549,49 @@ const VideoGenerator: React.FC = () => {
       }
   };
 
-  // Sync Audio and Video in Result View
-  const syncPlay = () => {
-      audioPlayerRef.current?.play();
+  // --- SYNC LOGIC ---
+
+  const handleVideoPlay = () => {
+      if (audioPlayerRef.current) {
+          audioPlayerRef.current.currentTime = videoPlayerRef.current?.currentTime || 0;
+          audioPlayerRef.current.play().catch(e => console.error("Audio playback failed:", e));
+      }
   };
-  const syncPause = () => {
+
+  const handleVideoPause = () => {
       audioPlayerRef.current?.pause();
   };
-  const syncTime = () => {
+
+  const handleVideoTimeUpdate = () => {
+      if (!videoPlayerRef.current || !audioPlayerRef.current) return;
+      
+      const videoTime = videoPlayerRef.current.currentTime;
+      const audioTime = audioPlayerRef.current.currentTime;
+      
+      // Detect Loop: If video time jumped back significantly close to 0
+      if (videoTime < lastVideoTimeRef.current && videoTime < 0.5) {
+          audioPlayerRef.current.currentTime = 0;
+          audioPlayerRef.current.play().catch(() => {});
+      }
+      lastVideoTimeRef.current = videoTime;
+
+      // Soft Sync: if drift > 0.3s, adjust. 
+      // Only adjust if audio is actually playing and has duration.
+      if (!audioPlayerRef.current.paused && audioPlayerRef.current.duration > 0) {
+           if (Math.abs(videoTime - audioTime) > 0.3) {
+               // Only seek audio if within valid range
+               if (videoTime < audioPlayerRef.current.duration) {
+                   audioPlayerRef.current.currentTime = videoTime;
+               }
+           }
+      }
+  };
+  
+  const handleVideoSeeked = () => {
       if (videoPlayerRef.current && audioPlayerRef.current) {
-          if (Math.abs(videoPlayerRef.current.currentTime - audioPlayerRef.current.currentTime) > 0.3) {
-             audioPlayerRef.current.currentTime = videoPlayerRef.current.currentTime;
+          const videoTime = videoPlayerRef.current.currentTime;
+          if (videoTime < audioPlayerRef.current.duration) {
+              audioPlayerRef.current.currentTime = videoTime;
           }
       }
   };
@@ -591,6 +678,15 @@ const VideoGenerator: React.FC = () => {
                     >
                         <Mic size={20} />
                     </button>
+                    
+                    <button 
+                        onClick={handleEnhancePrompt}
+                        disabled={isEnhancing || !currentPromptValue}
+                        className={`absolute top-2 right-14 p-3 rounded-xl transition-all border border-white/50 ${isEnhancing ? 'bg-indigo-50 text-indigo-600' : 'bg-white/50 text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm'}`}
+                        title="Melhorar Prompt com IA (Câmera & Estilo)"
+                    >
+                        {isEnhancing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                    </button>
                 </div>
                 
                 {/* Specific Voice Dropdown for Avatar Mode */}
@@ -652,13 +748,23 @@ const VideoGenerator: React.FC = () => {
                 )}
 
                 {/* File Preview & Avatar Specific UI */}
-                {previewUrl && (
+                {(previewUrl || bgMusicFile) && (
                     <div className="flex flex-wrap gap-2 mb-6 mx-2 mt-6">
-                        <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm">
-                            <ImageIcon size={18} />
-                            <span className="text-sm font-bold max-w-[200px] truncate">{selectedFile?.name}</span>
-                            <button onClick={handleRemoveFile} className="hover:text-indigo-900 bg-indigo-200/50 rounded-full p-1"><X size={12}/></button>
-                        </div>
+                        {previewUrl && (
+                            <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm">
+                                <ImageIcon size={18} />
+                                <span className="text-sm font-bold max-w-[200px] truncate">{selectedFile?.name}</span>
+                                <button onClick={handleRemoveFile} className="hover:text-indigo-900 bg-indigo-200/50 rounded-full p-1"><X size={12}/></button>
+                            </div>
+                        )}
+
+                        {bgMusicFile && (
+                            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-xl border border-green-100 shadow-sm">
+                                <Music size={18} />
+                                <span className="text-sm font-bold max-w-[200px] truncate">{bgMusicFile.name}</span>
+                                <button onClick={handleRemoveMusic} className="hover:text-green-900 bg-green-200/50 rounded-full p-1"><X size={12}/></button>
+                            </div>
+                        )}
 
                         {isAnalyzingVoice ? (
                            <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-4 py-2 rounded-xl border border-amber-100 animate-pulse">
@@ -699,7 +805,7 @@ const VideoGenerator: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Music Upload */}
+                        {/* Music Upload (Large Box in Avatar Mode) */}
                         <div 
                             onClick={() => musicInputRef.current?.click()}
                             className={`border border-dashed rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-colors ${bgMusicFile ? 'bg-green-50 border-green-300' : 'bg-white/50 border-slate-200 hover:bg-slate-50'}`}
@@ -718,7 +824,6 @@ const VideoGenerator: React.FC = () => {
                                      <X size={14}/>
                                  </button>
                              )}
-                             <input type="file" ref={musicInputRef} accept="audio/*" onChange={handleMusicSelect} className="hidden"/>
                         </div>
                     </div>
                 )}
@@ -960,6 +1065,16 @@ const VideoGenerator: React.FC = () => {
                         </button>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
 
+                        {/* GLOBAL MUSIC UPLOAD BUTTON */}
+                        <button 
+                            onClick={() => musicInputRef.current?.click()}
+                            className={`w-10 h-10 flex items-center justify-center rounded-full transition-all shrink-0 border ${bgMusicFile ? 'bg-green-100 border-green-300 text-green-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                            title="Adicionar Música de Fundo (MP3/WAV)"
+                        >
+                            <Music size={18} />
+                        </button>
+                        <input type="file" ref={musicInputRef} accept=".mp3,.wav,audio/*" onChange={handleMusicSelect} className="hidden"/>
+
                         <button
                             onClick={() => setShowVoiceSettings(!showVoiceSettings)}
                             className={`w-10 h-10 flex items-center justify-center rounded-full transition-all shrink-0 border ${showVoiceSettings ? 'bg-indigo-100 border-indigo-300 text-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
@@ -1162,15 +1277,43 @@ const VideoGenerator: React.FC = () => {
                     autoPlay 
                     loop 
                     className="w-full h-full object-contain" 
-                    onPlay={() => audioPlayerRef.current?.play()}
-                    onPause={() => audioPlayerRef.current?.pause()}
-                    onTimeUpdate={syncTime}
+                    onPlay={handleVideoPlay}
+                    onPause={handleVideoPause}
+                    onSeeked={handleVideoSeeked}
+                    onTimeUpdate={handleVideoTimeUpdate}
                  />
                  {/* Hidden Audio Player for Background Music Sync */}
-                 {bgMusicFile && (
-                     <audio ref={audioPlayerRef} src={URL.createObjectURL(bgMusicFile)} loop volume={0.2} />
+                 {musicUrl && (
+                     <audio ref={audioPlayerRef} src={musicUrl} loop />
                  )}
             </div>
+
+            {/* Music Controls */}
+            {bgMusicFile && (
+                <div className="mt-4 bg-white border border-slate-200 p-4 rounded-2xl flex items-center gap-4 shadow-sm animate-in fade-in">
+                    <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+                        <Music size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{bgMusicFile.name}</p>
+                        <p className="text-xs text-slate-500">Música de Fundo</p>
+                    </div>
+                    <div className="flex items-center gap-3 w-48">
+                        <Volume2 size={16} className="text-slate-400"/>
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="1" 
+                            step="0.05" 
+                            value={bgMusicVolume} 
+                            onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
+                            className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-green-500"
+                            title="Volume da Música"
+                        />
+                    </div>
+                </div>
+            )}
+
             <div className="mt-6 flex justify-center">
                  <a href={generatedVideo} download="video-gerado.mp4" className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
                     Baixar Vídeo
