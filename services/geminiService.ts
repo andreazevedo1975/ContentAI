@@ -84,28 +84,25 @@ export const enhanceVideoPrompt = async (simplePrompt: string): Promise<string> 
 
 /**
  * Analyzes an image to determine the subject type and appropriate voice persona.
- * Handles Quota (429) and Auth errors by prompting for a new key.
  */
 export const detectVoicePersona = async (imageBase64: string): Promise<{ type: string; voicePrompt: string; label: string }> => {
+  const ai = getAI();
   
-  const executeDetection = async () => {
-    // Create fresh instance to pick up potentially new key
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `
+    Analyze the main subject in this image for a "Talking Photo" video.
+    Determine if the subject is a:
+    - CHILD (Baby, Kid)
+    - FEMALE (Woman, Girl)
+    - MALE (Man, Boy)
+    - CUTE_ANIMAL (Cat, Dog, Mascot, Cartoon animal)
     
-    const prompt = `
-      Analyze the main subject in this image for a "Talking Photo" video.
-      Determine if the subject is a:
-      - CHILD (Baby, Kid)
-      - FEMALE (Woman, Girl)
-      - MALE (Man, Boy)
-      - CUTE_ANIMAL (Cat, Dog, Mascot, Cartoon animal)
-      
-      Return a JSON object with:
-      - "type": One of the categories above.
-      - "voicePrompt": A short, descriptive English prompt for the audio generation describing the voice tone (e.g. "High-pitched cute squeaky voice", "Deep authoritative male voice").
-      - "label": A Portuguese label for the UI (e.g. "Voz Infantil", "Voz Feminina", "Voz de Mascote").
-    `;
+    Return a JSON object with:
+    - "type": One of the categories above.
+    - "voicePrompt": A short, descriptive English prompt for the audio generation describing the voice tone (e.g. "High-pitched cute squeaky voice", "Deep authoritative male voice").
+    - "label": A Portuguese label for the UI (e.g. "Voz Infantil", "Voz Feminina", "Voz de Mascote").
+  `;
 
+  try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
@@ -122,34 +119,8 @@ export const detectVoicePersona = async (imageBase64: string): Promise<{ type: s
     const text = response.text;
     if (!text) return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
     return JSON.parse(cleanJSON(text));
-  };
-
-  try {
-    return await executeDetection();
   } catch (error: any) {
-    console.warn("Error detecting voice persona:", error.message);
-    
-    const errorMessage = error.message || JSON.stringify(error);
-    const isQuotaError = errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || error.status === "RESOURCE_EXHAUSTED" || error.code === 429;
-    const isKeyInvalidError = errorMessage.includes("API key expired") || errorMessage.includes("API_KEY_INVALID") || error.code === 400;
-
-    if (isQuotaError || isKeyInvalidError) {
-       console.warn("Quota/Key error in detection. Prompting for key...");
-       if (window.aistudio && window.aistudio.openSelectKey) {
-        try {
-            await window.aistudio.openSelectKey();
-            // Add delay to help with rate limits (RPM) before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return await executeDetection();
-        } catch (retryError) {
-            console.warn("Retry failed, returning default persona:", retryError);
-            // Graceful fallback to prevent UI crash
-            return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
-        }
-      }
-    }
-    
-    // Fallback return to prevent UI crash
+    console.warn("Error detecting voice persona:", error);
     return { type: 'UNKNOWN', voicePrompt: 'Clear narration voice', label: 'Padrão' };
   }
 };
@@ -195,16 +166,15 @@ export const generateMarketingPlan = async (productName: string, productDesc: st
  * Generates a social media content calendar.
  */
 export const generateSocialPlan = async (niche: string) => {
-  if (!process.env.API_KEY) return generateLocalSocialPlan(niche);
-  
-  const ai = getAI();
-  const prompt = `
-    Generate a social media content calendar for the current month for a brand in the "${niche}" niche.
-    Create 8 diverse posts distributed across the month.
-    Return ONLY JSON.
-  `;
-
+  // Try API first, fallback silently to local
   try {
+    const ai = getAI();
+    const prompt = `
+      Generate a social media content calendar for the current month for a brand in the "${niche}" niche.
+      Create 8 diverse posts distributed across the month.
+      Return ONLY JSON.
+    `;
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -215,8 +185,7 @@ export const generateSocialPlan = async (niche: string) => {
     });
     return JSON.parse(cleanJSON(response.text || "{}"));
   } catch (error) {
-    console.error("Error generating calendar:", error);
-    // Fallback to local
+    console.error("Error generating calendar, using fallback:", error);
     return generateLocalSocialPlan(niche);
   }
 };
@@ -224,14 +193,14 @@ export const generateSocialPlan = async (niche: string) => {
 export const generateLocalSocialPlan = (niche: string) => {
     return {
         posts: [
-            { day: 2, title: `${niche}: Bastidores`, platform: 'Instagram', time: '10:00' },
-            { day: 5, title: `Dica de ${niche}`, platform: 'TikTok', time: '18:00' },
+            { day: 2, title: `${niche}: Bastidores Exclusivos`, platform: 'Instagram', time: '10:00' },
+            { day: 5, title: `Top Dicas de ${niche}`, platform: 'TikTok', time: '18:00' },
             { day: 9, title: `Promoção Relâmpago`, platform: 'Facebook', time: '12:00' },
-            { day: 12, title: `Tutorial Rápido`, platform: 'TikTok', time: '19:00' },
-            { day: 16, title: `Meme do Nicho`, platform: 'Instagram', time: '15:00' },
-            { day: 20, title: `Depoimento de Cliente`, platform: 'Facebook', time: '11:00' },
-            { day: 24, title: `Trend Alert: ${niche}`, platform: 'TikTok', time: '20:00' },
-            { day: 28, title: `Resumo do Mês`, platform: 'Instagram', time: '17:00' }
+            { day: 12, title: `Tutorial Rápido: Como fazer`, platform: 'TikTok', time: '19:00' },
+            { day: 16, title: `Meme do Momento: ${niche}`, platform: 'Instagram', time: '15:00' },
+            { day: 20, title: `Depoimento de Cliente Feliz`, platform: 'Facebook', time: '11:00' },
+            { day: 24, title: `Trend Alert: O que vem por aí`, platform: 'TikTok', time: '20:00' },
+            { day: 28, title: `Resumo do Mês em 1 Minuto`, platform: 'Instagram', time: '17:00' }
         ]
     };
 };
@@ -240,16 +209,14 @@ export const generateLocalSocialPlan = (niche: string) => {
  * Generates analysis insights based on metrics.
  */
 export const generateAnalysis = async (metrics: any) => {
-  if (!process.env.API_KEY) return generateLocalAnalysis(metrics);
-
-  const ai = getAI();
-  const prompt = `
-    Analyze these social media metrics and provide a 2-sentence strategic insight on what to improve.
-    Metrics: ${JSON.stringify(metrics)}
-    Tone: Professional and encouraging.
-  `;
-  
   try {
+    const ai = getAI();
+    const prompt = `
+      Analyze these social media metrics and provide a 2-sentence strategic insight on what to improve.
+      Metrics: ${JSON.stringify(metrics)}
+      Tone: Professional and encouraging.
+    `;
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt
@@ -340,8 +307,6 @@ export const generateFastImage = async (prompt: string, imageBase64?: string, mi
  * Generates Speech from Text.
  */
 export const generateSpeech = async (text: string, voiceName: string = 'Kore') => {
-  if (!process.env.API_KEY) return generateLocalSpeech(text);
-
   const ai = getAI();
   try {
     const response = await ai.models.generateContent({
@@ -362,19 +327,9 @@ export const generateSpeech = async (text: string, voiceName: string = 'Kore') =
     return base64Audio;
   } catch (error) {
     console.error("Error generating speech:", error);
-    return generateLocalSpeech(text);
+    throw error;
   }
 };
-
-export const generateLocalSpeech = async (text: string) => {
-    console.warn("Using Local TTS Fallback (Browser)");
-    return new Promise<string>((resolve, reject) => {
-        // This is a dummy fallback that returns empty string to trigger UI alert, 
-        // or could technically capture system audio but that's complex. 
-        // For now we will just rely on the UI handling the failure or using window.speechSynthesis directly in component.
-        reject("API Key required for Neural Voice. Use Browser Voice instead.");
-    });
-}
 
 /**
  * Transcribes audio (e.g. microphone recording or file) to text using Gemini.
@@ -422,33 +377,33 @@ export const analyzeVoiceStyle = async (audioBase64: string): Promise<string> =>
 
 /**
  * Generates a Video using Veo.
- * Handles API Key errors specifically.
  */
 export const generateVideo = async (
     prompt: string, 
     imageBase64?: string,
     mimeType: string = 'image/png',
     modelId: string = 'veo-3.1-fast-generate-preview',
-    resolution: string = '720p'
+    resolution: string = '720p',
+    aspectRatio: string = '16:9'
 ) => {
   
-  const executeGeneration = async () => {
-    // New instance for fresh key
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const executeGeneration = async (currentModelId: string) => {
+    // New instance for fresh key logic if needed, but standard calls use process.env
+    const ai = getAI();
     const cleanMime = normalizeMimeType(mimeType);
     
-    console.log("Starting Veo generation with model:", modelId, "Res:", resolution, "Mime:", cleanMime);
+    console.log("Starting Veo generation with model:", currentModelId, "Res:", resolution, "Mime:", cleanMime, "Ratio:", aspectRatio);
     
     // Map '4k' to '1080p' as 4k is not fully supported in this preview tier, but we pass the best available.
     const apiResolution = resolution === '4k' ? '1080p' : resolution;
 
     const request: any = {
-      model: modelId,
+      model: currentModelId,
       prompt: prompt, 
       config: {
         numberOfVideos: 1,
         resolution: apiResolution, 
-        aspectRatio: '16:9' 
+        aspectRatio: aspectRatio 
       }
     };
 
@@ -463,7 +418,14 @@ export const generateVideo = async (
     
     while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({operation: operation});
+      // IMPORTANT: Explicitly pass the operation name to avoid 404 errors during polling
+      // if the SDK or API behavior varies.
+      if (operation.name) {
+          operation = await ai.operations.getVideosOperation({ name: operation.name });
+      } else {
+          // Fallback if name isn't directly on root, though it should be.
+          operation = await ai.operations.getVideosOperation({ operation: operation });
+      }
     }
 
     if (operation.error) {
@@ -476,37 +438,36 @@ export const generateVideo = async (
         throw new Error("No video URI returned from Veo API");
     }
 
-    const videoRes = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    // IMPORTANT: Append API key to fetch the content from the protected URI
+    // Use encodeURIComponent to ensure the key is passed correctly even if it has special chars
+    const videoRes = await fetch(`${downloadLink}&key=${encodeURIComponent(process.env.API_KEY || '')}`);
+    if (!videoRes.ok) {
+        throw new Error(`Failed to fetch video bytes. Status: ${videoRes.status}`);
+    }
     const blob = await videoRes.blob();
     return URL.createObjectURL(blob);
   };
 
   try {
-    return await executeGeneration();
+    return await executeGeneration(modelId);
   } catch (error: any) {
-    console.error("Error generating video:", error);
-    const errorMessage = error.message || JSON.stringify(error);
+    console.error("Error generating video with primary model:", error);
     
-    const isQuotaError = errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || error.status === "RESOURCE_EXHAUSTED" || error.code === 429;
-    const isEntityNotFoundError = errorMessage.includes("Requested entity was not found") || error.code === 404;
-    const isKeyInvalidError = errorMessage.includes("API key expired") || errorMessage.includes("API_KEY_INVALID") || error.code === 400;
-    const isArgumentError = errorMessage.includes("INVALID_ARGUMENT") || error.code === 400;
-
-    if (isEntityNotFoundError || isQuotaError || isKeyInvalidError) {
-      console.warn("Veo API Error (Key/Quota/Invalid). Prompting user to select key again...");
-      if (window.aistudio && window.aistudio.openSelectKey) {
+    // Fallback logic for Model Not Found or 404
+    // If we used 'fast', try 'standard'. If 'standard', try 'fast'.
+    const isNotFound = error.message?.includes('404') || error.message?.includes('NOT_FOUND') || error.status === 404;
+    
+    if (isNotFound) {
+        const fallbackModel = modelId.includes('fast') ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+        console.warn(`Primary model ${modelId} not found/failed (404). Retrying with fallback: ${fallbackModel}`);
         try {
-            await window.aistudio.openSelectKey();
-            // Add delay for rate limits
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log("Retrying video generation after key selection...");
-            return await executeGeneration();
+            return await executeGeneration(fallbackModel);
         } catch (retryError) {
-             console.error("Retry failed for video generation:", retryError);
-             throw retryError;
+            console.error("Fallback video generation also failed:", retryError);
+            throw retryError; // Throw the original error or the new one
         }
-      }
     }
+
     throw error;
   }
 };

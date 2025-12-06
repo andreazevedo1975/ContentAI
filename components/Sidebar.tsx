@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, Key, Zap, BookOpen, LayoutGrid, Boxes } from 'lucide-react';
+import { Home, Video, Image as ImageIcon, Sparkles, Mic, User, BarChart2, Edit3, Cloud, BookOpen, LayoutGrid, Boxes } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 // Brand Logo Component
@@ -69,7 +69,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Scrollable Nav */}
-      <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar pb-8">
         <NavItem to="/" icon={<Home />} label="Início" active={path === '/'} />
         <NavItem to="/studio" icon={<LayoutGrid />} label="Estúdio" active={path === '/studio'} />
 
@@ -89,28 +89,8 @@ const Sidebar: React.FC = () => {
         <NavItem to="/analytics" icon={<BarChart2 />} label="Analytics" active={path === '/analytics'} />
         <NavItem to="/editor" icon={<Edit3 />} label="Calendário" active={path === '/editor'} />
       </nav>
-
-      {/* Pro Footer */}
-      <div className="p-5 bg-white/40 border-t border-white/50 backdrop-blur-md">
-        <button 
-            onClick={() => window.aistudio?.openSelectKey?.()}
-            className="relative w-full overflow-hidden group bg-slate-900 text-white rounded-2xl p-4 shadow-xl hover:shadow-indigo-500/30 transition-all duration-300 hover:-translate-y-1"
-        >
-             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500 to-pink-500 rounded-full blur-2xl opacity-20 -mr-8 -mt-8 group-hover:opacity-50 transition-opacity"></div>
-             <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/10 group-hover:bg-white/20 transition-colors">
-                        <Key size={18} className="text-indigo-200" />
-                    </div>
-                    <div className="text-left">
-                        <p className="text-xs font-bold text-white">API Configuration</p>
-                        <p className="text-[10px] text-slate-400 group-hover:text-slate-200 transition-colors">Manage Keys</p>
-                    </div>
-                </div>
-                <Zap size={16} className="text-amber-400 fill-amber-400 animate-pulse" />
-             </div>
-        </button>
-      </div>
+      
+      {/* No Footer Button - API Key is managed via Environment */}
     </div>
   );
 };

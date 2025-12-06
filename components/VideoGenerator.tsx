@@ -100,10 +100,12 @@ const VideoGenerator: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const musicInputRef = useRef<HTMLInputElement>(null); // Ref for music upload
-  const videoPlayerRef = useRef<HTMLVideoElement>(null); // Ref for sync
-  const audioPlayerRef = useRef<HTMLAudioElement>(null); // Ref for sync
-  const lastVideoTimeRef = useRef(0); // Track video time for loop detection
+  
+  // Audio Sync Refs
+  const musicInputRef = useRef<HTMLInputElement>(null);
+  const videoPlayerRef = useRef<HTMLVideoElement>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement>(null);
+  const lastVideoTimeRef = useRef(0);
   
   // State for Prompts
   const [activeTab, setActiveTab] = useState<'main' | 'background' | 'avatar'>('main');
@@ -167,7 +169,7 @@ const VideoGenerator: React.FC = () => {
   // Handle incoming navigation state
   useEffect(() => {
     if (location.state) {
-      const state = location.state as { mode?: string; prompt?: string };
+      const state = location.state as { mode?: string; prompt?: string; aspectRatio?: string; image?: string };
       
       if (state.mode === 'background') {
           setActiveTab('background');
@@ -178,6 +180,17 @@ const VideoGenerator: React.FC = () => {
       } else {
           setActiveTab('main');
           if (state.prompt) setMainPrompt(state.prompt);
+      }
+
+      // Handle Aspect Ratio if passed
+      if (state.aspectRatio) {
+          setAspectRatio(state.aspectRatio);
+      }
+      
+      // Handle Image if passed (base64)
+      if (state.image) {
+          setPreviewUrl(state.image);
+          // Note: state.image is data url
       }
 
       if (state.mode) {
@@ -396,7 +409,8 @@ const VideoGenerator: React.FC = () => {
         audio.play();
     } catch (e) {
         console.error(e);
-        alert("Erro ao gerar prévia de áudio. Verifique sua chave API.");
+        // Removed specific key error message
+        alert("Erro ao gerar prévia de áudio.");
     }
   };
 
@@ -409,18 +423,25 @@ const VideoGenerator: React.FC = () => {
     setGeneratedVideo(null);
 
     try {
-      if (window.aistudio && window.aistudio.hasSelectedApiKey) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        if (!hasKey && window.aistudio.openSelectKey) {
-            await window.aistudio.openSelectKey();
-        }
-      }
-
       let imageBase64 = undefined;
       let mimeType = 'image/png';
       if (previewUrl) {
-        imageBase64 = previewUrl.split(',')[1];
-        if (selectedFile) mimeType = selectedFile.type;
+        // Handle data URL (which might come from navigation state OR file upload)
+        if (previewUrl.startsWith('data:')) {
+            const parts = previewUrl.split(',');
+            imageBase64 = parts[1];
+            // Extract mime type from data url header if possible
+            const match = parts[0].match(/:(.*?);/);
+            if (match) mimeType = match[1];
+        } else if (selectedFile) {
+            // It's a file selection
+            const reader = new FileReader();
+            imageBase64 = await new Promise((resolve) => {
+                reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                reader.readAsDataURL(selectedFile);
+            });
+            mimeType = selectedFile.type;
+        }
       }
 
       const wordCount = currentPrompt.split(/\s+/).length;
@@ -521,13 +542,14 @@ const VideoGenerator: React.FC = () => {
           finalPrompt += ", cinematic motion, 24fps, film look, traditional cinema frame rate.";
       }
 
-      // Pass resolution to service
-      const videoUri = await generateVideo(finalPrompt, imageBase64, mimeType, modelId, resolution);
+      // Pass resolution AND aspectRatio to service
+      const videoUri = await generateVideo(finalPrompt, imageBase64, mimeType, modelId, resolution, aspectRatio);
       setGeneratedResultVideo(videoUri);
 
     } catch (error) {
       console.error(error);
-      alert("Erro ao gerar vídeo. Verifique a chave API e tente novamente.");
+      // Removed specific key error message
+      alert("Erro ao gerar vídeo. Tente novamente.");
     } finally {
       setIsGenerating(false);
     }
@@ -753,7 +775,7 @@ const VideoGenerator: React.FC = () => {
                         {previewUrl && (
                             <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm">
                                 <ImageIcon size={18} />
-                                <span className="text-sm font-bold max-w-[200px] truncate">{selectedFile?.name}</span>
+                                <span className="text-sm font-bold max-w-[200px] truncate">{selectedFile?.name || "Imagem Carregada"}</span>
                                 <button onClick={handleRemoveFile} className="hover:text-indigo-900 bg-indigo-200/50 rounded-full p-1"><X size={12}/></button>
                             </div>
                         )}

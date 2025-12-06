@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Plus, AudioLines, Mic, Play, Loader2, X, Upload, Video, User, Music, CheckCircle2, Pause, Sparkles } from 'lucide-react';
 import { generateSpeech, generateVideo } from '../services/geminiService';
@@ -312,7 +313,8 @@ const Avatars: React.FC = () => {
           reader.readAsDataURL(videoFile);
       } catch (e) {
           console.error(e);
-          alert("Erro ao gerar vídeo. Verifique a chave API.");
+          // Removed specific key error message
+          alert("Erro ao gerar vídeo.");
       } finally {
           setLoading(false);
       }

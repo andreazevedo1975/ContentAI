@@ -1,10 +1,10 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Video, Image as ImageIcon, Mic, Split, ArrowRight, X, Upload, Check, Monitor, Smartphone, Square, RectangleHorizontal } from 'lucide-react';
+import { Search, Video, Image as ImageIcon, Mic, Split, ArrowRight, X, Upload, Check, Monitor, Smartphone, Square, RectangleHorizontal, Sparkles } from 'lucide-react';
 
 // --- Compare Slider Component ---
-const CompareSlider: React.FC<{ before: string; after: string; alt: string; isVintage?: boolean }> = ({ before, after, alt, isVintage }) => {
+const CompareSlider: React.FC<{ before: string; after: string; alt: string; isVintage?: boolean; isNoisy?: boolean }> = ({ before, after, alt, isVintage, isNoisy }) => {
   const [sliderPosition, setSliderPosition] = useState(50);
 
   const handleMove = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,6 +45,16 @@ const CompareSlider: React.FC<{ before: string; after: string; alt: string; isVi
                 <div className="absolute top-1/4 left-0 w-full h-[1px] bg-white/40 rotate-12 blur-[1px]"></div>
                 <div className="absolute top-3/4 left-0 w-full h-[1px] bg-white/30 -rotate-6 blur-[1px]"></div>
             </div>
+          )}
+
+          {/* Noise Overlay */}
+          {isNoisy && (
+              <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-overlay" 
+                    style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+                    filter: 'contrast(1.2)'
+                    }}
+              ></div>
           )}
       </div>
 
@@ -256,6 +266,17 @@ const TOOLS = [
     afterImage: "https://images.unsplash.com/photo-1617347454431-f49d7ff5c3b1?auto=format&fit=crop&w=600&q=80" // Context bg (using similar watch concept/feel)
   },
   { 
+    id: 50, 
+    title: "Redução de Ruído (Denoise)", 
+    type: "edit", 
+    image: "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=600&q=80", 
+    prompt: "Denoise image, remove grain, smooth textures, high clarity, photorealistic", 
+    compare: true,
+    isNoisy: true,
+    beforeImage: "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=600&q=80", // Forest
+    afterImage: "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=600&q=80" // Forest (Same, overlay handles noise)
+  },
+  { 
     id: 13, 
     title: "Remover Texto da Imagem", 
     type: "edit", 
@@ -326,6 +347,7 @@ const ModelCard: React.FC<{ item: typeof TOOLS[0]; onClick: () => void }> = ({ i
               after={item.afterImage} 
               alt={item.title}
               isVintage={(item as any).isVintage}
+              isNoisy={(item as any).isNoisy}
             />
         ) : (
             <img 

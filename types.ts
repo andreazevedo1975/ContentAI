@@ -34,15 +34,9 @@ export interface CalendarPost {
   time: string;
 }
 
-// Global type definition for AI Studio window object
+// Global type definition
 declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
-
   interface Window {
-    aistudio?: AIStudio;
     webkitAudioContext: typeof AudioContext;
     webkitSpeechRecognition: any;
   }

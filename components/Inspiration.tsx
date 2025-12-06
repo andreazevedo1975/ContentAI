@@ -36,7 +36,8 @@ const GRID_ITEMS = Array.from({ length: 60 }).map((_, i) => {
     { title: "Eco Lifestyle", id: "1542601906990-b4d3fb7d5b43", cat: "Nature" }, // Green
     { title: "Urban Jungle", id: "1449824913929-2b362a3fec17", cat: "City" }, // Urban Plants
     { title: "Space Odyssey", id: "1446776811953-b23d57bd21aa", cat: "Space" }, // Space
-    { title: "Cyberpunk Street", id: "1555680202-c86f0e12f086", cat: "City" } // Cyberpunk
+    { title: "Cyberpunk Street", id: "1555680202-c86f0e12f086", cat: "City" }, // Cyberpunk
+    { title: "Mystical Forest", id: "1511497584788-876760111969", cat: "Nature" } // Forest Rays
   ];
 
   const theme = themes[i % themes.length];
@@ -50,7 +51,9 @@ const GRID_ITEMS = Array.from({ length: 60 }).map((_, i) => {
     category: CATEGORIES[i % CATEGORIES.length],
     tag: TAGS[i % TAGS.length],
     badgeType: i % 3 === 0 ? 'script' : 'clips',
-    prompt: `Create a high quality video about ${theme.title} in a viral TikTok style, cinematic lighting.`
+    prompt: theme.title === "Mystical Forest" 
+      ? "A mystical forest at dawn, with rays of sunlight breaking through the canopy, creating a magical atmosphere. Style: Photorealistic, cinematic lighting, detailed textures, wide angle shot."
+      : `Create a high quality video about ${theme.title} in a viral TikTok style, cinematic lighting.`
   };
 });
 

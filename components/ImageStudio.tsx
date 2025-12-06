@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { generateImage, generateFastImage, enhancePrompt } from '../services/geminiService';
@@ -18,7 +19,8 @@ import {
   Upload,
   X,
   Mic,
-  Rocket
+  Rocket,
+  Droplet
 } from 'lucide-react';
 import { ImageMode } from '../types';
 
@@ -81,7 +83,7 @@ const ToolButton: React.FC<{ icon: React.ReactNode; label: string; color?: strin
 // --- Main Component ---
 const ImageStudio: React.FC = () => {
   const location = useLocation();
-  const initialState = location.state as { mode?: ImageMode; prompt?: string } | null;
+  const initialState = location.state as { mode?: ImageMode; prompt?: string; image?: string } | null;
   
   const [view, setView] = useState<'hub' | 'generator'>(initialState?.mode ? 'generator' : 'hub');
   const [mode, setMode] = useState<ImageMode>(initialState?.mode || 'product');
@@ -90,7 +92,7 @@ const ImageStudio: React.FC = () => {
   // Generator State
   const [prompt, setPrompt] = useState(initialState?.prompt || '');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(initialState?.image ? `data:image/png;base64,${initialState.image}` : null);
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
@@ -103,6 +105,10 @@ const ImageStudio: React.FC = () => {
     if (initialState?.prompt) {
         setPrompt(initialState.prompt);
         setMode(initialState.mode || 'product');
+        if(initialState.image) {
+            setFilePreview(`data:image/png;base64,${initialState.image}`);
+             // Note: selectedFile won't be set from base64 easily, but we handle base64 pass-through in logic if needed
+        }
         setView('generator');
     }
   }, [initialState]);
@@ -169,18 +175,22 @@ const ImageStudio: React.FC = () => {
     try {
       let result;
       
-      if (mode === 'design' && selectedFile) {
-          // Image editing logic using Fast Image
+      // Handle file or passed base64 preview
+      let base64Data = '';
+      if (selectedFile) {
           const reader = new FileReader();
-          reader.onloadend = async () => {
-              const base64 = (reader.result as string).split(',')[1];
-              // Pass file type correctly for robust handling
-              result = await generateFastImage(prompt, base64, selectedFile.type);
-              setImage(result);
-              setLoading(false);
-          };
-          reader.readAsDataURL(selectedFile);
-          return; // Wait for reader
+          base64Data = await new Promise((resolve) => {
+               reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+               reader.readAsDataURL(selectedFile);
+          });
+      } else if (filePreview && filePreview.startsWith('data:')) {
+          base64Data = filePreview.split(',')[1];
+      }
+
+      if (mode === 'design' && base64Data) {
+          // Image editing logic using Fast Image
+          result = await generateFastImage(prompt, base64Data, selectedFile?.type || 'image/png');
+          setImage(result);
       } else {
           result = mode === 'design'
             ? await generateFastImage(prompt) 
@@ -188,9 +198,9 @@ const ImageStudio: React.FC = () => {
           setImage(result);
       }
     } catch (e) {
-      alert("Falha na geração de imagem. Tente novamente.");
+      alert("Erro ao gerar imagem.");
     } finally {
-      if (!selectedFile) setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -283,6 +293,12 @@ const ImageStudio: React.FC = () => {
                     label="Variações em lote" 
                     color="bg-blue-100" 
                     onClick={() => openGenerator('design', "Variações de design para...")} 
+                />
+                <ToolButton 
+                    icon={<Droplet size={20} />} 
+                    label="Denoise / Limpar" 
+                    color="bg-teal-100" 
+                    onClick={() => openGenerator('design', "Denoise image, remove grain, smooth textures, high clarity", true)} 
                 />
                 <ToolButton 
                     icon={<Rocket size={20} />} 
@@ -380,7 +396,7 @@ const ImageStudio: React.FC = () => {
               
               {/* Upload Section */}
               <div 
-                 className={`mb-4 border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition-colors cursor-pointer ${selectedFile ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-indigo-300'}`}
+                 className={`mb-4 border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center transition-colors cursor-pointer ${selectedFile || filePreview ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-indigo-300'}`}
                  onClick={() => fileInputRef.current?.click()}
               >
                  <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden"/>
